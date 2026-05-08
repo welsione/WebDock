@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+    <title>MineAI Hub</title>
+    <style>
+      /* ===== Design Tokens (Dark: default) ===== */
+      :root {
+        --bg: #08090c;
+        --surface: #0d0f14;
+        --surface-2: #13161e;
+        --surface-3: #1a1e28;
+        --text: rgba(255, 255, 255, 0.88);
+        --muted: rgba(255, 255, 255, 0.42);
+        --faint: rgba(255, 255, 255, 0.14);
+        --border: rgba(255, 255, 255, 0.06);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        --hover-bg: rgba(255, 255, 255, 0.05);
+        --accent: #5eead4;
+        --accent-rgb: 94, 234, 212;
+        --accent-dim: rgba(94, 234, 212, 0.08);
+        --accent-glow: rgba(94, 234, 212, 0.15);
+        --brand-bg: linear-gradient(135deg, #5eead4 0%, #2dd4bf 50%, #14b8a6 100%);
+        --brand-text: #08090c;
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius: 10px;
+        --radius-lg: 14px;
+        --transition-fast: 120ms ease;
+        --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        --sidebar-width: 64px;
+      }
+
+      /* ===== Light Theme ===== */
+      [data-theme="light"] {
+        --bg: #f8f9fb;
+        --surface: #ffffff;
+        --surface-2: #f4f5f7;
+        --surface-3: #ebedf0;
+        --text: rgba(0, 0, 0, 0.82);
+        --muted: rgba(0, 0, 0, 0.38);
+        --faint: rgba(0, 0, 0, 0.1);
+        --border: rgba(0, 0, 0, 0.05);
+        --border-strong: rgba(0, 0, 0, 0.1);
+        --hover-bg: rgba(0, 0, 0, 0.03);
+        --accent: #0d9488;
+        --accent-rgb: 13, 148, 136;
+        --accent-dim: rgba(13, 148, 136, 0.06);
+        --accent-glow: rgba(13, 148, 136, 0.12);
+        --brand-bg: linear-gradient(135deg, #14b8a6 0%, #0d9488 50%, #0f766e 100%);
+        --brand-text: #ffffff;
+      }
+
+      /* ===== Reset ===== */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        height: 100%;
+        background: var(--surface);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow: hidden;
+        transition: background var(--transition), color var(--transition);
+      }
+
+      /* ===== App Shell ===== */
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: var(--sidebar-width) 1fr;
+      }
+
+      /* ===== Sidebar ===== */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 38px 8px 12px;
+        width: var(--sidebar-width);
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        position: relative;
+        z-index: 10;
+        -webkit-app-region: drag;
+        transition: width 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                    padding 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                    background var(--transition),
+                    border-color var(--transition),
+                    opacity 200ms ease;
+      }
+
+      /* Subtle inner glow on left edge */
+      .sidebar::before {
+        content: "";
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 1px;
+        background: linear-gradient(180deg,
+          transparent 0%,
+          rgba(var(--accent-rgb), 0.15) 20%,
+          rgba(var(--accent-rgb), 0.25) 50%,
+          rgba(var(--accent-rgb), 0.15) 80%,
+          transparent 100%
+        );
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      /* ===== Nav Section ===== */
+      .nav-section {
+        width: 100%;
+        margin-top: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .nav-item {
+        appearance: none;
+        -webkit-appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        width: 100%;
+        height: 36px;
+        border-radius: var(--radius);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all var(--transition-fast);
+        position: relative;
+        letter-spacing: 0.3px;
+        -webkit-app-region: no-drag;
+      }
+
+      .nav-item:hover {
+        color: var(--text);
+        background: var(--hover-bg);
+      }
+
+      .nav-item:active {
+        transform: scale(0.95);
+      }
+
+      .nav-item img {
+        opacity: 0.45;
+        transition: opacity var(--transition-fast);
+      }
+
+      .nav-item:hover img {
+        opacity: 0.8;
+      }
+
+      .nav-item[data-active="true"] img {
+        opacity: 1;
+      }
+
+      .nav-item:active {
+        transform: scale(0.95);
+      }
+
+      /* Active state */
+      .nav-item[data-active="true"] {
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .nav-item[data-active="true"]::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 18px;
+        background: var(--accent);
+        border-radius: 0 3px 3px 0;
+        box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.5);
+      }
+
+      /* ===== Divider ===== */
+      .sidebar-divider {
+        width: 28px;
+        height: 1px;
+        background: var(--border-strong);
+        margin: 8px 0;
+        border-radius: 1px;
+      }
+
+      /* ===== Action Buttons ===== */
+      .sidebar-actions {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .sidebar-bottom {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .icon-btn {
+        appearance: none;
+        -webkit-appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        width: 100%;
+        height: 36px;
+        border-radius: var(--radius);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        transition: all var(--transition-fast);
+        -webkit-app-region: no-drag;
+      }
+
+      .icon-btn:hover {
+        color: var(--text);
+        background: var(--hover-bg);
+      }
+
+      .icon-btn:active {
+        transform: scale(0.95);
+      }
+
+      /* 主题图标切换 */
+      [data-theme="light"] .theme-icon-dark,
+      [data-theme="dark"] .theme-icon-light { display: none; }
+
+      /* 专注模式箭头翻转 */
+      #toggleFocus svg { transition: transform 0.2s ease; }
+      body.focus #toggleFocus svg { transform: rotate(180deg); }
+
+      /* ===== Loading Overlay ===== */
+      .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: var(--sidebar-width);
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: var(--bg);
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 200ms ease;
+      }
+
+      .loading-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--faint);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .loading-overlay span {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* ===== Toast ===== */
+      .toast-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        left: calc(var(--sidebar-width) + 20px);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+      }
+
+      .toast {
+        padding: 9px 14px;
+        border-radius: var(--radius-sm);
+        background: var(--surface-3);
+        border: 1px solid var(--border-strong);
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 500;
+        animation: toastIn 220ms ease;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        pointer-events: none;
+        margin-left: auto;
+      }
+
+      .toast.out { animation: toastOut 180ms ease forwards; }
+
+      @keyframes toastIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes toastOut {
+        from { opacity: 1; transform: translateY(0); }
+        to   { opacity: 0; transform: translateY(-4px); }
+      }
+
+      /* ===== Status Indicator ===== */
+      .status-indicator {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        padding: 4px 10px;
+        border-radius: var(--radius-xs);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--muted);
+        z-index: 50;
+        opacity: 0;
+        transition: opacity 200ms ease;
+      }
+
+      .status-indicator.visible {
+        opacity: 1;
+      }
+
+      /* ===== Menubar Mode Indicator ===== */
+      .menubar-indicator {
+        display: none;
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        padding: 4px 10px;
+        border-radius: var(--radius-xs);
+        background: var(--accent-dim);
+        border: 1px solid rgba(var(--accent-rgb), 0.2);
+        font-size: 11px;
+        color: var(--accent);
+        z-index: 50;
+      }
+
+      body[data-mode="menubar"] .menubar-indicator {
+        display: block;
+      }
+
+      /* ===== Focus Mode (Hide Sidebar) ===== */
+      body.focus .app {
+        grid-template-columns: 0 1fr;
+      }
+
+      body.focus .sidebar {
+        display: none;
+      }
+
+      body.focus .loading-overlay,
+      body.focus .toast-container {
+        left: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="nav-section">
+          <nav class="sidebar-actions" id="nav" aria-label="AI 服务导航"></nav>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-actions">
+          <button class="icon-btn" id="reloadFrame" data-tooltip="重载">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+        </div>
+
+        <div class="sidebar-bottom">
+          <button class="icon-btn" id="toggleFocus" data-tooltip="专注模式">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <button class="icon-btn" id="toggleTheme" data-tooltip="切换主题">
+            <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button class="icon-btn" id="toggleMode" data-tooltip="切换模式">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="7" height="12" rx="1"/><rect x="15" y="6" width="7" height="12" rx="1"/><path d="M9 3v18"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <span id="loadingText">正在加载…</span>
+      </div>
+
+      <!-- Status Indicator -->
+      <div class="status-indicator" id="statusIndicator"></div>
+
+      <!-- Menubar Mode Indicator -->
+      <div class="menubar-indicator">菜单栏模式</div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+    <script>
+      // ===== State =====
+      let providers = []
+      let currentProviderKey = 'deepseek'
+      let isLoading = false
+
+      // ===== DOM =====
+      const $ = id => document.getElementById(id)
+      const nav = $('nav')
+      const loadingOverlay = $('loadingOverlay')
+      const loadingText = $('loadingText')
+      const statusIndicator = $('statusIndicator')
+      const toastContainer = $('toastContainer')
+
+      // ===== Toast =====
+      function toast(msg) {
+        const el = document.createElement('div')
+        el.className = 'toast'
+        el.textContent = msg
+        toastContainer.appendChild(el)
+        const remove = () => {
+          if (!el.parentNode) return
+          el.classList.add('out')
+          el.addEventListener('animationend', () => el.remove(), { once: true })
+        }
+        const t = setTimeout(remove, 1600)
+        el.addEventListener('click', () => { clearTimeout(t); remove(); })
+      }
+
+      // ===== Loading =====
+      function showLoading(text = '正在加载…') {
+        isLoading = true
+        loadingOverlay.classList.add('visible')
+        loadingText.textContent = text
+      }
+
+      function hideLoading() {
+        isLoading = false
+        loadingOverlay.classList.remove('visible')
+      }
+
+      // ===== Status =====
+      function showStatus(text, duration = 2000) {
+        statusIndicator.textContent = text
+        statusIndicator.classList.add('visible')
+        setTimeout(() => {
+          statusIndicator.classList.remove('visible')
+        }, duration)
+      }
+
+      // ===== Nav =====
+      function setActive(key) {
+        currentProviderKey = key
+        renderNav()
+        window.electronAPI.switchProvider(key)
+      }
+
+      function renderNav() {
+        nav.innerHTML = ''
+        providers.forEach((x, i) => {
+          const btn = document.createElement('button')
+          btn.type = 'button'
+          btn.className = 'nav-item'
+          btn.dataset.active = String(x.key === currentProviderKey)
+          btn.title = `${x.name} (${i + 1})`
+          btn.addEventListener('click', () => setActive(x.key))
+          const img = document.createElement('img')
+          img.src = x.icon
+          img.alt = x.name
+          img.style.width = '24px'
+          img.style.height = '24px'
+          img.style.borderRadius = '6px'
+          btn.appendChild(img)
+          nav.appendChild(btn)
+        })
+      }
+
+      // ===== Theme =====
+      const Theme = {
+        _current: null,
+        get() {
+          if (this._current) return this._current
+          const s = localStorage.getItem('mineai-hub:theme')
+          if (s === 'light' || s === 'dark') return s
+          return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        },
+        set(t) {
+          this._current = t
+          localStorage.setItem('mineai-hub:theme', t)
+          document.documentElement.setAttribute('data-theme', t)
+        },
+        toggle() { this.set(this.get() === 'dark' ? 'light' : 'dark'); window.electronAPI.notifyThemeChange(this.get()) },
+        apply() { this.set(this.get()) }
+      }
+
+      window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('mineai-hub:theme')) Theme.set(e.matches ? 'light' : 'dark')
+      })
+
+      // ===== Focus Mode =====
+      let focusMode = false
+      function syncFocusUI(isFocus) {
+        focusMode = isFocus
+        document.body.classList.toggle('focus', isFocus)
+      }
+      function toggleFocus() {
+        syncFocusUI(!focusMode)
+        window.electronAPI.notifySidebarState(focusMode)
+      }
+
+      // ===== Actions =====
+      $('reloadFrame').addEventListener('click', () => {
+        window.electronAPI.reload()
+        showStatus('已重载')
+      })
+
+      $('toggleTheme').addEventListener('click', () => Theme.toggle())
+      $('toggleFocus').addEventListener('click', (e) => {
+        e.stopPropagation()
+        toggleFocus()
+      })
+      $('toggleMode').addEventListener('click', async () => {
+        const mode = await window.electronAPI.toggleMode()
+        document.body.dataset.mode = mode
+        toast(mode === 'menubar' ? '已切换到菜单栏模式' : '已切换到窗口模式')
+      })
+
+      // ===== IPC Events =====
+      window.electronAPI.onLoading((data) => {
+        const { provider, status, error } = data
+        if (status === 'loading') {
+          const p = providers.find(x => x.key === provider)
+          showLoading(p ? `正在加载 ${p.name}…` : '正在加载…')
+        } else if (status === 'loaded') {
+          hideLoading()
+        } else if (status === 'error') {
+          hideLoading()
+          toast(`加载失败：${error || '未知错误'}`)
+        }
+      })
+
+      window.electronAPI.onModeChange((mode) => {
+        document.body.dataset.mode = mode
+      })
+
+      // ===== Init =====
+      async function init() {
+        providers = await window.electronAPI.getProviders()
+        currentProviderKey = await window.electronAPI.getCurrentProvider()
+        const mode = await window.electronAPI.getMode()
+        document.body.dataset.mode = mode
+
+        renderNav()
+        Theme.apply()
+
+        // 同步初始主题到主进程（触发首次服务加载）
+        window.electronAPI.notifyThemeChange(Theme.get())
+      }
+
+      // 监听退出专注模式
+      window.electronAPI.onExitFocusMode(() => syncFocusUI(false))
+
+      init()
+    </script>
+  </body>
+</html>

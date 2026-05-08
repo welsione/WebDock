@@ -1,0 +1,29 @@
+appId: com.mineai.hub
+productName: MineAI Hub
+directories:
+  output: dist
+  buildResources: assets
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
