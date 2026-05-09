@@ -4,6 +4,12 @@ directories:
   output: dist
   buildResources: assets
 
+extraResources:
+  - from: "assets"
+    to: "assets"
+    filter:
+      - "*.png"
+
 mac:
   category: public.app-category.productivity
   target:
@@ -15,7 +21,7 @@ mac:
       arch:
         - x64
         - arm64
-  icon: assets/icon.png
+  icon: assets/icon.icns
   hardenedRuntime: true
   gatekeeperAssess: false
 
