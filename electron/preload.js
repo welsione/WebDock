@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getShortcut: () => ipcRenderer.invoke('get-shortcut'),
   setShortcut: (acc) => ipcRenderer.invoke('set-shortcut', acc),
 
+  // 切换服务商快捷键
+  getSwitchShortcut: () => ipcRenderer.invoke('get-switch-shortcut'),
+  setSwitchShortcut: (acc) => ipcRenderer.invoke('set-switch-shortcut', acc),
+
   // 设置页面显隐
   toggleSettings: (show) => ipcRenderer.send('toggle-settings', show)
 })

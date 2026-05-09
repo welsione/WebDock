@@ -30,7 +30,7 @@
         --radius-lg: 14px;
         --transition-fast: 120ms ease;
         --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-        --sidebar-width: 64px;
+        --sidebar-width: 74px;
       }
 
       /* ===== Light Theme ===== */
@@ -82,7 +82,6 @@
         padding: 38px 8px 12px;
         width: var(--sidebar-width);
         background: var(--surface);
-        border-right: 1px solid var(--border);
         position: relative;
         z-index: 10;
         -webkit-app-region: drag;
@@ -182,6 +181,12 @@
         background: var(--accent);
         border-radius: 0 3px 3px 0;
         box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.5);
+        animation: slideIn 200ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @keyframes slideIn {
+        from { transform: translateY(-50%) scaleY(0); opacity: 0; }
+        to   { transform: translateY(-50%) scaleY(1); opacity: 1; }
       }
 
       /* ===== Divider ===== */
@@ -601,6 +606,10 @@
                 <div class="settings-row-label">全局快捷键</div>
                 <div class="shortcut-input" id="shortcutInput" tabindex="0">Cmd+Shift+Space</div>
               </div>
+              <div class="shortcut-row">
+                <div class="settings-row-label">切换服务商</div>
+                <div class="shortcut-input" id="switchShortcutInput" tabindex="0">Shift+Tab</div>
+              </div>
             </div>
           </div>
         </div>
@@ -652,15 +661,26 @@
       }
 
       // ===== Loading =====
+      let loadingStartTime = 0
+      const MIN_LOADING_MS = 200
+      let hideLoadingTimer = null
+
       function showLoading(text = '正在加载…') {
+        clearTimeout(hideLoadingTimer)
         isLoading = true
+        loadingStartTime = Date.now()
         loadingOverlay.classList.add('visible')
         loadingText.textContent = text
       }
 
       function hideLoading() {
-        isLoading = false
-        loadingOverlay.classList.remove('visible')
+        const elapsed = Date.now() - loadingStartTime
+        const delay = Math.max(0, MIN_LOADING_MS - elapsed)
+        clearTimeout(hideLoadingTimer)
+        hideLoadingTimer = setTimeout(() => {
+          isLoading = false
+          loadingOverlay.classList.remove('visible')
+        }, delay)
       }
 
       // ===== Status =====
@@ -746,6 +766,8 @@
       // ===== Settings =====
       let shortcutKeys = []
       const shortcutInput = $('shortcutInput')
+      const switchShortcutInput = $('switchShortcutInput')
+      let switchShortcutKeys = []
       const settingsPage = $('settingsPage')
       const settingsTheme = $('settingsTheme')
 
@@ -754,6 +776,11 @@
         shortcutInput.textContent = s || '未设置'
         shortcutInput.classList.remove('recording')
         shortcutKeys = []
+        const ss = await window.electronAPI.getSwitchShortcut()
+        switchShortcutInput.textContent = ss || '未设置'
+        switchShortcutInput.classList.remove('recording')
+        switchShortcutKeys = []
+        switchShortcut = ss || 'Shift+Tab'
         const isDark = Theme.get() === 'dark'
         settingsTheme.classList.toggle('on', isDark)
         $('settingsThemeHint').textContent = isDark ? '暗色' : '亮色'
@@ -815,6 +842,41 @@
         }
       })
 
+      // 切换服务商快捷键录制
+      switchShortcutInput.addEventListener('click', () => {
+        switchShortcutInput.classList.add('recording')
+        switchShortcutInput.textContent = '请按键…'
+        switchShortcutKeys = []
+      })
+
+      switchShortcutInput.addEventListener('keydown', (e) => {
+        e.preventDefault()
+        if (!switchShortcutInput.classList.contains('recording')) return
+        switchShortcutKeys = []
+        if (e.metaKey) switchShortcutKeys.push('Meta')
+        if (e.ctrlKey) switchShortcutKeys.push('Control')
+        if (e.altKey) switchShortcutKeys.push('Alt')
+        if (e.shiftKey) switchShortcutKeys.push('Shift')
+        if (!['MetaLeft','MetaRight','ControlLeft','ControlRight','AltLeft','AltRight','ShiftLeft','ShiftRight'].includes(e.code)) {
+          switchShortcutKeys.push(e.code.startsWith('Key') ? e.code.slice(3) : e.code)
+        }
+        switchShortcutInput.textContent = shortcutDisplay(switchShortcutKeys)
+      })
+
+      switchShortcutInput.addEventListener('keyup', async () => {
+        switchShortcutInput.classList.remove('recording')
+        if (switchShortcutKeys.length > 1) {
+          const acc = switchShortcutKeys.join('+')
+          await window.electronAPI.setSwitchShortcut(acc)
+          switchShortcutInput.textContent = shortcutDisplay(switchShortcutKeys)
+          switchShortcut = acc
+          toast('切换快捷键已更新')
+        } else {
+          const s = await window.electronAPI.getSwitchShortcut()
+          switchShortcutInput.textContent = s || '未设置'
+        }
+      })
+
       // ===== IPC Events =====
       window.electronAPI.onLoading((data) => {
         const { provider, status, error } = data
@@ -842,6 +904,7 @@
 
         renderNav()
         Theme.apply()
+        switchShortcut = await window.electronAPI.getSwitchShortcut() || 'Shift+Tab'
 
         // 同步初始主题到主进程（触发首次服务加载）
         window.electronAPI.notifyThemeChange(Theme.get())
@@ -849,6 +912,34 @@
 
       // 监听退出专注模式
       window.electronAPI.onExitFocusMode(() => syncFocusUI(false))
+
+      // 切换服务商快捷键（可自定义，默认 Shift+Tab）
+      let switchShortcut = 'Shift+Tab'
+      function matchShortcut(e, acc) {
+        if (!acc) return false
+        const parts = acc.split('+')
+        const mods = { Meta: e.metaKey, Control: e.ctrlKey, Alt: e.altKey, Shift: e.shiftKey }
+        const expectedMods = parts.filter(p => ['Meta','Control','Alt','Shift'].includes(p))
+        const expectedKey = parts.find(p => !['Meta','Control','Alt','Shift'].includes(p))
+        if (!expectedKey) return false
+        for (const m of ['Meta','Control','Alt','Shift']) {
+          if (mods[m] !== expectedMods.includes(m)) return false
+        }
+        const keyCode = e.code.startsWith('Key') ? e.code.slice(3) : e.code
+        return keyCode === expectedKey
+      }
+      function cycleProvider() {
+        if (providers.length === 0) return
+        const idx = providers.findIndex(p => p.key === currentProviderKey)
+        const next = providers[(idx + 1) % providers.length]
+        if (next.key !== currentProviderKey) setActive(next.key)
+      }
+      document.addEventListener('keydown', (e) => {
+        if (matchShortcut(e, switchShortcut)) {
+          e.preventDefault()
+          cycleProvider()
+        }
+      })
 
       init()
     </script>

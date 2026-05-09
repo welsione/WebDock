@@ -18,11 +18,12 @@
       width: 100%;
       height: 100%;
       background: transparent;
-      cursor: pointer;
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
+      -webkit-app-region: no-drag;
+      user-select: none;
     }
 
     /* 悬浮腰圆条 */
@@ -33,6 +34,14 @@
       background: var(--edge-pill);
       transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
+      cursor: grab;
+    }
+
+    body.dragging .pill {
+      width: 5px;
+      height: 40px;
+      border-radius: 2.5px;
+      background: var(--edge-pill-hover);
     }
 
     body:hover .pill {
@@ -53,8 +62,39 @@
       document.documentElement.setAttribute('data-theme', t)
     })
 
-    document.body.addEventListener('click', function () {
-      window.edgeAPI.exitFocus()
+    var dragging = false
+    var startX = 0, startY = 0
+    var totalDX = 0, totalDY = 0
+
+    document.body.addEventListener('mousedown', function (e) {
+      dragging = true
+      startX = e.screenX
+      startY = e.screenY
+      totalDX = 0
+      totalDY = 0
+      document.body.classList.add('dragging')
+      e.preventDefault()
+    })
+
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return
+      var dx = e.screenX - startX
+      var dy = e.screenY - startY
+      totalDX += dx
+      totalDY += dy
+      startX = e.screenX
+      startY = e.screenY
+      window.edgeAPI.moveWindow(dx, dy)
+    })
+
+    window.addEventListener('mouseup', function () {
+      if (!dragging) return
+      dragging = false
+      document.body.classList.remove('dragging')
+      // 移动 < 3px 视为点击，退出专注模式
+      if (Math.abs(totalDX) < 3 && Math.abs(totalDY) < 3) {
+        window.edgeAPI.exitFocus()
+      }
     })
   </script>
 </body>

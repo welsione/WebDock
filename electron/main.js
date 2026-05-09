@@ -23,7 +23,7 @@ const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso'])
 // ===== Constants =====
 const MODE = { WINDOW: 'window', MENUBAR: 'menubar' }
 const THEME = { DARK: 'dark', LIGHT: 'light' }
-const SIDEBAR_WIDTH = 64
+const SIDEBAR_WIDTH = 74
 const EDGE_WIDTH = 0
 const EDGE_PILL_WIDTH = 16
 const EDGE_PILL_HEIGHT = 48
@@ -42,6 +42,7 @@ let edgeWindow = null
 let currentTheme = THEME.DARK
 let initialProviderLoaded = false
 let currentShortcut = 'Cmd+Shift+Space'
+let switchShortcut = 'Shift+Tab'
 
 // ===== Helpers =====
 function getActiveWin() {
@@ -418,6 +419,24 @@ function switchProvider(key) {
     view.webContents.loadURL(provider.url)
     win.webContents.send('loading', { provider: key, status: 'loading' })
 
+    // 切换服务商快捷键（可自定义，默认 Shift+Tab）
+    view.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !switchShortcut) return
+      const parts = switchShortcut.split('+')
+      const expectedMods = new Set(parts.filter(p => ['Meta','Control','Alt','Shift'].includes(p)))
+      const expectedKey = parts.find(p => !['Meta','Control','Alt','Shift'].includes(p))
+      if (!expectedKey) return
+      if (input.meta !== expectedMods.has('Meta')) return
+      if (input.control !== expectedMods.has('Control')) return
+      if (input.alt !== expectedMods.has('Alt')) return
+      if (input.shift !== expectedMods.has('Shift')) return
+      const keyCode = input.code.startsWith('Key') ? input.code.slice(3) : input.code
+      if (keyCode !== expectedKey) return
+      const idx = PROVIDERS.findIndex(p => p.key === currentProviderKey)
+      const next = PROVIDERS[(idx + 1) % PROVIDERS.length]
+      if (next.key !== currentProviderKey) switchProvider(next.key)
+    })
+
     view.webContents.on('did-finish-load', () => {
       if (currentProviderKey === key) {
         win.webContents.send('loading', { provider: key, status: 'loaded' })
@@ -517,6 +536,20 @@ function setupIPC() {
         }
       })
     }
+  })
+
+  // 切换服务商快捷键
+  ipcMain.handle('get-switch-shortcut', () => switchShortcut)
+  ipcMain.handle('set-switch-shortcut', (event, acc) => {
+    switchShortcut = acc || 'Shift+Tab'
+  })
+
+  // 边缘条拖拽移动窗口（专注模式下）
+  ipcMain.on('move-window', (event, dx, dy) => {
+    const win = getActiveWin()
+    if (!win) return
+    const [x, y] = win.getPosition()
+    win.setPosition(x + dx, y + dy)
   })
 
   // 主题变化同步到边缘条窗口及所有 BrowserView
