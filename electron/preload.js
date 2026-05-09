@@ -39,5 +39,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 监听退出专注模式
   onExitFocusMode: (callback) => {
     ipcRenderer.on('exit-focus-mode', () => callback())
-  }
+  },
+
+  // 快捷键设置
+  getShortcut: () => ipcRenderer.invoke('get-shortcut'),
+  setShortcut: (acc) => ipcRenderer.invoke('set-shortcut', acc),
+
+  // 设置页面显隐
+  toggleSettings: (show) => ipcRenderer.send('toggle-settings', show)
 })

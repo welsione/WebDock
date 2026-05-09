@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme } = require('electron')
+const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme, globalShortcut } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -41,6 +41,7 @@ let SIDEBAR_COLLAPSED = false
 let edgeWindow = null
 let currentTheme = THEME.DARK
 let initialProviderLoaded = false
+let currentShortcut = 'Cmd+Shift+Space'
 
 // ===== Helpers =====
 function getActiveWin() {
@@ -56,11 +57,32 @@ const THEME_SCRIPTS = {
 }
 
 // ===== App Ready =====
+function registerGlobalShortcut(acc) {
+  globalShortcut.unregisterAll()
+  if (!acc) return
+  const registered = globalShortcut.register(acc, () => {
+    const win = mainWindow
+    if (!win) { showMainWindow(); return }
+    if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
+      if (mode === MODE.MENUBAR && popupWindow) popupWindow.hide()
+      else win.hide()
+    } else {
+      showMainWindow()
+    }
+  })
+  if (!registered) console.error('Failed to register global shortcut:', acc)
+}
+
 app.whenReady().then(() => {
   createTray()
   createMainWindow()
   setupIPC()
   setupMenu()
+  registerGlobalShortcut(currentShortcut)
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
 
 // ===== Create Main Window =====
@@ -256,8 +278,8 @@ function buildTrayMenu() {
     {
       label: '模式',
       submenu: [
-        { label: '独立窗口', type: 'radio', checked: mode === MODE.WINDOW, click: () => setMode(MODE.WINDOW) },
-        { label: '菜单栏', type: 'radio', checked: mode === MODE.MENUBAR, click: () => setMode(MODE.MENUBAR) }
+        { label: '独立窗口', type: 'radio', checked: true },
+        { label: '菜单栏', enabled: false }
       ]
     },
     { type: 'separator' },
@@ -312,8 +334,7 @@ function createEdgeWindow(parentWin) {
     x: parentBounds.x,
     y: pillY,
     frame: false,
-    transparent: false,
-    backgroundColor: THEME_BG[currentTheme],
+    transparent: true,
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
@@ -466,13 +487,44 @@ function setupIPC() {
     if (popupWindow) popupWindow.webContents.send('exit-focus-mode')
   })
 
+  // 设置页面显隐
+  ipcMain.on('toggle-settings', (event, show) => {
+    const view = views.get(currentProviderKey)
+    const win = getActiveWin()
+    if (!view || !win) return
+    if (show) {
+      try { win.removeBrowserView(view) } catch (e) {}
+    } else {
+      win.addBrowserView(view)
+      updateBrowserViewBounds()
+    }
+  })
+
+  // 快捷键设置
+  ipcMain.handle('get-shortcut', () => currentShortcut)
+  ipcMain.handle('set-shortcut', (event, acc) => {
+    currentShortcut = acc
+    globalShortcut.unregisterAll()
+    if (acc) {
+      globalShortcut.register(acc, () => {
+        const win = mainWindow
+        if (!win) { showMainWindow(); return }
+        if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
+          if (mode === MODE.MENUBAR && popupWindow) popupWindow.hide()
+          else win.hide()
+        } else {
+          showMainWindow()
+        }
+      })
+    }
+  })
+
   // 主题变化同步到边缘条窗口及所有 BrowserView
   ipcMain.on('theme-changed', (event, theme) => {
     if (theme === currentTheme && initialProviderLoaded) return // 避免重复更新
     currentTheme = theme
     nativeTheme.themeSource = theme
     if (edgeWindow) {
-      edgeWindow.setBackgroundColor(THEME_BG[theme])
       edgeWindow.webContents.send('edge-theme-changed', theme)
     }
     // 首次：收到渲染进程主题后加载默认服务
@@ -500,12 +552,6 @@ function setupMenu() {
       label: 'MineAI Hub',
       submenu: [
         { role: 'about' },
-        { type: 'separator' },
-        {
-          label: '切换模式',
-          accelerator: 'Cmd+M',
-          click: () => setMode(mode === MODE.WINDOW ? MODE.MENUBAR : MODE.WINDOW)
-        },
         { type: 'separator' },
         { role: 'quit' }
       ]

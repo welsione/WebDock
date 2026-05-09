@@ -235,10 +235,6 @@
         transform: scale(0.95);
       }
 
-      /* 主题图标切换 */
-      [data-theme="light"] .theme-icon-dark,
-      [data-theme="dark"] .theme-icon-light { display: none; }
-
       /* 专注模式箭头翻转 */
       #toggleFocus svg { transition: transform 0.2s ease; }
       body.focus #toggleFocus svg { transform: rotate(180deg); }
@@ -374,6 +370,171 @@
       body.focus .toast-container {
         left: 0;
       }
+
+      /* ===== Settings Page (macOS style) ===== */
+      .settings-page {
+        position: fixed;
+        left: var(--sidebar-width);
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--bg);
+        z-index: 200;
+        display: none;
+        flex-direction: column;
+        overflow-y: auto;
+      }
+      .settings-page.visible { display: flex; }
+
+      .settings-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 44px 28px 14px;
+        border-bottom: 1px solid var(--border);
+        -webkit-app-region: drag;
+      }
+      .settings-header span {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.3px;
+      }
+      .settings-back {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px;
+        margin-left: -4px;
+        border-radius: var(--radius-xs);
+        display: grid;
+        place-items: center;
+        transition: all 0.15s;
+        -webkit-app-region: no-drag;
+      }
+      .settings-back:hover { color: var(--text); background: var(--hover-bg); }
+
+      .settings-body {
+        padding: 24px 28px;
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      /* 分组卡片 */
+      .settings-group {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .settings-group-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--muted);
+        padding: 0 0 8px 4px;
+      }
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 11px 16px;
+        min-height: 44px;
+      }
+      .settings-row + .settings-row {
+        border-top: 1px solid var(--border);
+      }
+      .settings-row-label {
+        font-size: 13px;
+        color: var(--text);
+      }
+      .settings-row-hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      /* macOS style toggle */
+      .settings-toggle {
+        appearance: none;
+        border: none;
+        background: #c0c0c4;
+        width: 38px;
+        height: 22px;
+        border-radius: 11px;
+        cursor: pointer;
+        position: relative;
+        transition: background 0.25s;
+        flex-shrink: 0;
+      }
+      .settings-toggle.on { background: var(--accent); }
+      .settings-toggle-knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: white;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 1px 1px rgba(0,0,0,0.06);
+      }
+      .settings-row.disabled { opacity: 0.4; pointer-events: none; }
+      .settings-toggle:disabled { cursor: default; opacity: 0.4; }
+
+      .settings-toggle.on .settings-toggle-knob {
+        transform: translateX(16px);
+        box-shadow: 0 1px 3px rgba(var(--accent-rgb), 0.3);
+      }
+
+      /* 快捷键输入 */
+      .shortcut-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 11px 16px;
+        min-height: 44px;
+      }
+      .shortcut-input {
+        width: 200px;
+        height: 30px;
+        border-radius: 6px;
+        border: none;
+        background: var(--surface-2);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s;
+        outline: none;
+        box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1);
+        flex-shrink: 0;
+      }
+      .shortcut-input:hover { background: var(--surface-3); }
+      .shortcut-input.recording {
+        box-shadow: 0 0 0 2px var(--accent);
+        color: var(--accent);
+      }
+
+      body.focus .settings-page {
+        left: 0;
+      }
+      [data-theme="light"] .shortcut-input {
+        box-shadow: 0 0 0 0.5px rgba(0,0,0,0.12);
+      }
+      [data-theme="light"] .settings-toggle {
+        background: #d1d1d6;
+      }
+    </style>
     </style>
   </head>
   <body>
@@ -395,15 +556,55 @@
           <button class="icon-btn" id="toggleFocus" data-tooltip="专注模式">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           </button>
-          <button class="icon-btn" id="toggleTheme" data-tooltip="切换主题">
-            <svg class="theme-icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-            <svg class="theme-icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          </button>
-          <button class="icon-btn" id="toggleMode" data-tooltip="切换模式">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="7" height="12" rx="1"/><rect x="15" y="6" width="7" height="12" rx="1"/><path d="M9 3v18"/></svg>
+          <button class="icon-btn" id="toggleSettings" data-tooltip="设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
           </button>
         </div>
       </aside>
+
+      <!-- Settings Page -->
+      <div class="settings-page" id="settingsPage">
+        <div class="settings-header">
+          <button class="settings-back" id="btnSettingsBack">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span>设置</span>
+        </div>
+        <div class="settings-body">
+          <div>
+            <div class="settings-group-title">外观</div>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label">主题</div>
+                  <div class="settings-row-hint" id="settingsThemeHint">暗色</div>
+                </div>
+                <button class="settings-toggle" id="settingsTheme">
+                  <span class="settings-toggle-knob"></span>
+                </button>
+              </div>
+              <div class="settings-row disabled">
+                <div>
+                  <div class="settings-row-label">窗口模式</div>
+                  <div class="settings-row-hint">独立窗口</div>
+                </div>
+                <button class="settings-toggle on" disabled>
+                  <span class="settings-toggle-knob"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="settings-group-title">快捷键</div>
+            <div class="settings-group">
+              <div class="shortcut-row">
+                <div class="settings-row-label">全局快捷键</div>
+                <div class="shortcut-input" id="shortcutInput" tabindex="0">Cmd+Shift+Space</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Loading Overlay -->
       <div class="loading-overlay" id="loadingOverlay">
@@ -537,15 +738,81 @@
         showStatus('已重载')
       })
 
-      $('toggleTheme').addEventListener('click', () => Theme.toggle())
       $('toggleFocus').addEventListener('click', (e) => {
         e.stopPropagation()
         toggleFocus()
       })
-      $('toggleMode').addEventListener('click', async () => {
-        const mode = await window.electronAPI.toggleMode()
-        document.body.dataset.mode = mode
-        toast(mode === 'menubar' ? '已切换到菜单栏模式' : '已切换到窗口模式')
+
+      // ===== Settings =====
+      let shortcutKeys = []
+      const shortcutInput = $('shortcutInput')
+      const settingsPage = $('settingsPage')
+      const settingsTheme = $('settingsTheme')
+
+      async function refreshSettings() {
+        const s = await window.electronAPI.getShortcut()
+        shortcutInput.textContent = s || '未设置'
+        shortcutInput.classList.remove('recording')
+        shortcutKeys = []
+        const isDark = Theme.get() === 'dark'
+        settingsTheme.classList.toggle('on', isDark)
+        $('settingsThemeHint').textContent = isDark ? '暗色' : '亮色'
+      }
+
+      $('toggleSettings').addEventListener('click', () => {
+        refreshSettings()
+        settingsPage.classList.add('visible')
+        window.electronAPI.toggleSettings(true)
+      })
+
+      $('btnSettingsBack').addEventListener('click', () => {
+        settingsPage.classList.remove('visible')
+        window.electronAPI.toggleSettings(false)
+      })
+
+      // 主题开关
+      settingsTheme.addEventListener('click', () => {
+        Theme.toggle()
+        const isDark = Theme.get() === 'dark'
+        settingsTheme.classList.toggle('on', isDark)
+        $('settingsThemeHint').textContent = isDark ? '暗色' : '亮色'
+      })
+
+      function shortcutDisplay(keys) {
+        const map = { Meta: 'Cmd', Control: 'Ctrl', Alt: 'Opt', Shift: 'Shift' }
+        return keys.map(k => map[k] || k).join('+')
+      }
+
+      shortcutInput.addEventListener('click', () => {
+        shortcutInput.classList.add('recording')
+        shortcutInput.textContent = '请按键…'
+        shortcutKeys = []
+      })
+
+      shortcutInput.addEventListener('keydown', (e) => {
+        e.preventDefault()
+        if (!shortcutInput.classList.contains('recording')) return
+        shortcutKeys = []
+        if (e.metaKey) shortcutKeys.push('Meta')
+        if (e.ctrlKey) shortcutKeys.push('Control')
+        if (e.altKey) shortcutKeys.push('Alt')
+        if (e.shiftKey) shortcutKeys.push('Shift')
+        if (!['MetaLeft','MetaRight','ControlLeft','ControlRight','AltLeft','AltRight','ShiftLeft','ShiftRight'].includes(e.code)) {
+          shortcutKeys.push(e.code.startsWith('Key') ? e.code.slice(3) : e.code)
+        }
+        shortcutInput.textContent = shortcutDisplay(shortcutKeys)
+      })
+
+      shortcutInput.addEventListener('keyup', async () => {
+        shortcutInput.classList.remove('recording')
+        if (shortcutKeys.length > 1) {
+          const acc = shortcutKeys.join('+')
+          await window.electronAPI.setShortcut(acc)
+          shortcutInput.textContent = shortcutDisplay(shortcutKeys)
+          toast('快捷键已更新')
+        } else {
+          loadShortcut()
+        }
       })
 
       // ===== IPC Events =====

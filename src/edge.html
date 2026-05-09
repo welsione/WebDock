@@ -5,37 +5,41 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    :root {
+      --edge-pill: rgba(255, 255, 255, 0.2);
+      --edge-pill-hover: rgba(255, 255, 255, 0.45);
+    }
+    [data-theme="light"] {
+      --edge-pill: rgba(0, 0, 0, 0.12);
+      --edge-pill-hover: rgba(0, 0, 0, 0.28);
+    }
+
     html, body {
       width: 100%;
       height: 100%;
-      background: var(--edge-bg);
+      background: transparent;
       cursor: pointer;
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s ease;
     }
 
+    /* 悬浮腰圆条 */
     .pill {
       width: 4px;
-      height: 36px;
+      height: 32px;
       border-radius: 2px;
-      background: rgba(255, 255, 255, 0.25);
-      transition: all 0.3s ease;
-    }
-
-    [data-theme="light"] .pill {
-      background: rgba(0, 0, 0, 0.15);
+      background: var(--edge-pill);
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
     }
 
     body:hover .pill {
       width: 5px;
-      background: rgba(94, 234, 212, 0.6);
-    }
-
-    [data-theme="light"] body:hover .pill {
-      background: rgba(13, 148, 136, 0.5);
+      height: 40px;
+      border-radius: 2.5px;
+      background: var(--edge-pill-hover);
     }
   </style>
 </head>
