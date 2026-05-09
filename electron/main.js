@@ -149,8 +149,6 @@ function createPopupWindow() {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    vibrancy: 'popover',
-    visualEffectState: 'active',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -566,9 +564,9 @@ app.on('activate', () => {
 // ===== Prevent navigation in main window =====
 app.on('web-contents-created', (event, contents) => {
   if (contents.getType() !== 'window') return
-  contents.on('will-navigate', (event) => {
-    if (contents.getURL().startsWith('file://')) {
-      event.preventDefault()
+  contents.on('will-navigate', (navEvent, url) => {
+    if (url && url.startsWith('file://')) {
+      navEvent.preventDefault()
     }
   })
 })
