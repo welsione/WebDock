@@ -14,6 +14,12 @@ macOS（Apple Silicon / Intel）：
 
 [下载 v1.0.1](https://github.com/welsione/MineAI-Hub/releases/tag/v1.0.1)
 
+> 首次打开提示"已损坏"，在终端执行：
+> ```bash
+> xattr -cr /Applications/MineAI\ Hub.app
+> ```
+> 然后重新打开即可。这是因为未经过 Apple 代码签名。
+
 ## 功能
 
 - **多服务聚合** — 侧边栏一键切换 DeepSeek / 豆包 / Kimi / 秘塔
