@@ -2,6 +2,18 @@
 
 AI 服务聚合桌面应用，一站式访问 DeepSeek、豆包、Kimi、秘塔等主流 AI 对话平台。
 
+## 截图
+
+![主界面](image/mineai_main.png)
+
+![专注模式](image/mineai_focus.png)
+
+## 下载
+
+macOS（Apple Silicon / Intel）：
+
+[下载最新版本](https://github.com/welsione/MineAI-Hub/releases)
+
 ## 功能
 
 - **多服务聚合** — 侧边栏一键切换 DeepSeek / 豆包 / Kimi / 秘塔

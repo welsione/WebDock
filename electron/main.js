@@ -1,12 +1,20 @@
 const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme } = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 // ===== Providers =====
+// base64 data URL，路径区分开发/打包
+const iconBaseDir = app.isPackaged
+  ? path.join(process.resourcesPath, 'assets')
+  : path.join(__dirname, '..', 'assets')
+function loadIcon(name) {
+  return `data:image/png;base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
+}
 const PROVIDERS = [
-  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: '../assets/deepseek.png' },
-  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: '../assets/doubao.png' },
-  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: '../assets/kimi.png' },
-  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: '../assets/metaso.png' }
+  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png') },
+  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png') },
+  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png') },
+  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png') }
 ]
 
 // 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载
@@ -16,8 +24,9 @@ const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso'])
 const MODE = { WINDOW: 'window', MENUBAR: 'menubar' }
 const THEME = { DARK: 'dark', LIGHT: 'light' }
 const SIDEBAR_WIDTH = 64
-const EDGE_WIDTH = 12
-const EDGE_MIN_HEIGHT = 100
+const EDGE_WIDTH = 0
+const EDGE_PILL_WIDTH = 16
+const EDGE_PILL_HEIGHT = 48
 const POPUP_WIDTH = 500
 const POPUP_HEIGHT = 700
 
@@ -39,12 +48,12 @@ function getActiveWin() {
 }
 
 // 预计算主题注入脚本，避免每次构建字符串
+const THEME_BG = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
+
 const THEME_SCRIPTS = {
   [THEME.DARK]: `(function(){var t='dark';var k=['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'];k.forEach(function(x){try{localStorage.setItem(x,t)}catch(e){}});document.documentElement.setAttribute('data-theme',t);document.documentElement.classList.add('dark');document.documentElement.classList.remove('light');try{window.dispatchEvent(new StorageEvent('storage',{key:'theme',newValue:t}))}catch(e){}})()`,
   [THEME.LIGHT]: `(function(){var t='light';var k=['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'];k.forEach(function(x){try{localStorage.setItem(x,t)}catch(e){}});document.documentElement.setAttribute('data-theme',t);document.documentElement.classList.add('light');document.documentElement.classList.remove('dark');try{window.dispatchEvent(new StorageEvent('storage',{key:'theme',newValue:t}))}catch(e){}})()`
 }
-
-const THEME_BG = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
 
 // ===== App Ready =====
 app.whenReady().then(() => {
@@ -63,7 +72,7 @@ function createMainWindow() {
     minHeight: 400,
     show: false, // 先不显示，等加载完成
     titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 12, y: 6 },
+    trafficLightPosition: { x: 8, y: 6 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -291,18 +300,19 @@ function updateBrowserViewBounds() {
   }
 }
 
-// 创建边缘条窗口（专注模式下点击退出）
+// 创建边缘条窗口（悬浮腰圆条，类似 iOS 底部横条）
 function createEdgeWindow(parentWin) {
   if (edgeWindow) return
 
   const contentBounds = parentWin.getContentBounds()
   const parentBounds = parentWin.getBounds()
+  const pillY = contentBounds.y + Math.round((contentBounds.height - EDGE_PILL_HEIGHT) / 2)
 
   edgeWindow = new BrowserWindow({
-    width: EDGE_WIDTH,
-    height: Math.max(EDGE_MIN_HEIGHT, contentBounds.height),
+    width: EDGE_PILL_WIDTH,
+    height: EDGE_PILL_HEIGHT,
     x: parentBounds.x,
-    y: contentBounds.y,
+    y: pillY,
     frame: false,
     transparent: false,
     backgroundColor: THEME_BG[currentTheme],
@@ -333,7 +343,6 @@ function createEdgeWindow(parentWin) {
   }
   parentWin.on('move', debouncedUpdateEdge)
   parentWin.on('resize', debouncedUpdateEdge)
-  // 存储以便销毁时移除
   edgeWindow._cleanup = () => {
     parentWin.removeListener('move', debouncedUpdateEdge)
     parentWin.removeListener('resize', debouncedUpdateEdge)
@@ -347,9 +356,9 @@ function updateEdgeWindowPosition() {
   if (!parentWin) return
 
   const contentBounds = parentWin.getContentBounds()
+  const pillY = contentBounds.y + Math.round((contentBounds.height - EDGE_PILL_HEIGHT) / 2)
 
-  edgeWindow.setPosition(contentBounds.x, contentBounds.y)
-  edgeWindow.setSize(EDGE_WIDTH, Math.max(EDGE_MIN_HEIGHT, contentBounds.height))
+  edgeWindow.setPosition(contentBounds.x, pillY)
 }
 
 function destroyEdgeWindow() {

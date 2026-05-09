@@ -5,76 +5,42 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :root {
-      --edge-bg: #0d0f14;
-      --edge-glow: rgba(94, 234, 212, 0.4);
-      --edge-accent: rgba(94, 234, 212, 0.5);
-    }
-
-    [data-theme="light"] {
-      --edge-bg: #ffffff;
-      --edge-glow: rgba(13, 148, 136, 0.4);
-      --edge-accent: rgba(13, 148, 136, 0.5);
-    }
-
     html, body {
       width: 100%;
       height: 100%;
       background: var(--edge-bg);
       cursor: pointer;
       overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: background 0.2s ease;
     }
 
-    .glow {
-      position: absolute;
-      right: 0; top: 0; bottom: 0;
-      width: 2px;
-      background: linear-gradient(180deg,
-        transparent 0%,
-        transparent 10%,
-        var(--edge-glow) 30%,
-        var(--edge-glow) 70%,
-        transparent 90%,
-        transparent 100%
-      );
-      transition: opacity 0.2s ease;
-      opacity: 0.5;
+    .pill {
+      width: 4px;
+      height: 36px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.25);
+      transition: all 0.3s ease;
     }
 
-    body:hover .glow {
-      opacity: 1;
-      box-shadow: 0 0 6px var(--edge-glow);
+    [data-theme="light"] .pill {
+      background: rgba(0, 0, 0, 0.15);
     }
 
-    .dot {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+    body:hover .pill {
       width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--edge-accent);
-      opacity: 0.5;
-      animation: breathe 2s ease-in-out infinite;
-      animation-play-state: paused;
-      transition: background 0.2s ease;
+      background: rgba(94, 234, 212, 0.6);
     }
 
-    body:hover .dot {
-      animation-play-state: running;
-    }
-
-    @keyframes breathe {
-      0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(0.8); }
-      50%      { opacity: 0.9; transform: translate(-50%, -50%) scale(1.2); }
+    [data-theme="light"] body:hover .pill {
+      background: rgba(13, 148, 136, 0.5);
     }
   </style>
 </head>
 <body>
-  <div class="glow"></div>
-  <div class="dot"></div>
+  <div class="pill"></div>
   <script>
     var params = new URLSearchParams(window.location.search)
     document.documentElement.setAttribute('data-theme', params.get('theme') || 'dark')
