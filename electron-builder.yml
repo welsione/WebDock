@@ -4,20 +4,23 @@ directories:
   output: dist
   buildResources: assets
 
+asar: true
+
 extraResources:
   - from: "assets"
     to: "assets"
     filter:
       - "*.png"
 
+files:
+  - "electron/**/*"
+  - "src/**/*"
+  - "package.json"
+
 mac:
   category: public.app-category.productivity
   target:
     - target: dmg
-      arch:
-        - x64
-        - arm64
-    - target: zip
       arch:
         - x64
         - arm64
