@@ -1,6 +1,6 @@
 # MineAI Hub
 
-你的 AI 控制中心。一个桌面应用，连接 DeepSeek、豆包、Kimi、秘塔等主流 AI 助手，告别浏览器标签页切换，所有智能对话一站直达。
+还在多个浏览器标签页之间反复横跳？MineAI Hub 把 DeepSeek、豆包、Kimi、秘塔装进一个桌面应用 — 敲代码问 DeepSeek，写文案问豆包，做研究问秘塔，一个快捷键，所有 AI 助手随叫随到。
 
 ![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
