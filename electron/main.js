@@ -274,15 +274,7 @@ function setMode(newMode) {
 
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
-    { label: '打开主窗口', click: () => showMainWindow() },
-    { type: 'separator' },
-    {
-      label: '模式',
-      submenu: [
-        { label: '独立窗口', type: 'radio', checked: mode === MODE.WINDOW, click: () => setMode(MODE.WINDOW) },
-        { label: '菜单栏', type: 'radio', checked: mode === MODE.MENUBAR, click: () => setMode(MODE.MENUBAR) }
-      ]
-    },
+    { label: '显示窗口', click: () => showMainWindow() },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() }
   ])
