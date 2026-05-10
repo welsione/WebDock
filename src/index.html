@@ -72,6 +72,7 @@
         height: 100%;
         display: grid;
         grid-template-columns: var(--sidebar-width) 1fr;
+        transition: grid-template-columns 250ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       /* ===== Sidebar ===== */
@@ -107,6 +108,7 @@
         );
         opacity: 0.6;
         pointer-events: none;
+        transition: opacity 150ms ease;
       }
 
       /* ===== Nav Section ===== */
@@ -260,7 +262,7 @@
         z-index: 100;
         opacity: 0;
         pointer-events: none;
-        transition: opacity 200ms ease;
+        transition: opacity 200ms ease, left 250ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .loading-overlay.visible {
@@ -295,6 +297,7 @@
         flex-direction: column;
         gap: 6px;
         pointer-events: none;
+        transition: left 250ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .toast {
@@ -368,11 +371,31 @@
       }
 
       body.focus .sidebar {
-        display: none;
+        width: 0;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      body.focus .sidebar::before {
+        opacity: 0;
+      }
+
+      body.focus .sidebar .nav-item,
+      body.focus .sidebar .icon-btn {
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+
+      body.focus .sidebar .sidebar-divider {
+        opacity: 0;
+        transition: opacity 150ms ease;
       }
 
       body.focus .loading-overlay,
-      body.focus .toast-container {
+      body.focus .toast-container,
+      body.focus .update-banner {
         left: 0;
       }
 
@@ -386,6 +409,7 @@
         background: var(--bg);
         z-index: 200;
         display: none;
+        transition: left 250ms cubic-bezier(0.4, 0, 0.2, 1);
         flex-direction: column;
         overflow-y: auto;
       }
@@ -865,6 +889,7 @@
         z-index: 300;
         font-size: 13px;
         color: var(--text);
+        transition: left 250ms cubic-bezier(0.4, 0, 0.2, 1);
       }
       .update-banner.visible { display: flex; }
       .update-banner-text { flex: 1; }
@@ -1263,7 +1288,15 @@
       }
       function toggleFocus() {
         syncFocusUI(!focusMode)
-        window.electronAPI.notifySidebarState(focusMode)
+        if (focusMode) {
+          // 进入专注模式：等侧边栏收起动画播完再移动 BrowserView
+          setTimeout(() => {
+            window.electronAPI.notifySidebarState(focusMode)
+          }, 250)
+        } else {
+          // 退出专注模式：立即通知移动 BrowserView 腾出空间，配合 CSS 动画
+          window.electronAPI.notifySidebarState(focusMode)
+        }
       }
 
       // ===== Actions =====

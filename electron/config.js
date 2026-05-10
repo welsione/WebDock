@@ -39,7 +39,7 @@ const THEME = { DARK: 'dark', LIGHT: 'light' }
 const SIDEBAR_WIDTH = 74
 const EDGE_WIDTH = 0
 const EDGE_PILL_WIDTH = 16
-const EDGE_PILL_HEIGHT = 48
+const EDGE_PILL_HEIGHT = 72
 const POPUP_WIDTH = 500
 const POPUP_HEIGHT = 700
 

@@ -706,11 +706,18 @@ function setupIPC() {
 
   ipcMain.on('sidebar-state', (event, collapsed) => {
     SIDEBAR_COLLAPSED = collapsed
+    const win = getActiveWin()
+    if (win && !win.isDestroyed()) {
+      win.setWindowButtonVisibility(!collapsed)
+    }
     updateBrowserViewBounds()
   })
 
   ipcMain.on('exit-focus', () => {
     SIDEBAR_COLLAPSED = false
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setWindowButtonVisibility(true)
+    }
     destroyEdgeWindow()
     updateBrowserViewBounds()
     if (mainWindow) mainWindow.webContents.send('exit-focus-mode')
