@@ -1,4 +1,5 @@
-const { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell } = require('electron')
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard } = require('electron')
+const { autoUpdater } = require('electron-updater')
 // Tray, nativeImage — 暂不启用托盘菜单，后续如需启用取消注释
 // const { Tray, nativeImage } = require('electron')
 const path = require('path')
@@ -15,6 +16,7 @@ const {
   POPUP_WIDTH,
   POPUP_HEIGHT,
   THEME_SCRIPTS,
+  CHAT_INPUT_SELECTORS,
   matchesKeyEvent
 } = require('./config')
 
@@ -24,6 +26,9 @@ let popupWindow = null
 // let tray = null // 暂不启用托盘菜单
 const views = new Map() // providerKey -> BrowserView 缓存，切换不销毁
 let currentProviderKey = 'deepseek'
+let enabledProviders = null // null = 全部内置启用
+let customProviders = [] // [{key, name, url}]
+let providerOrder = null // null = 默认顺序，否则为 key 数组
 let mode = MODE.WINDOW
 let SIDEBAR_COLLAPSED = false
 let edgeWindow = null
@@ -31,6 +36,8 @@ let currentTheme = THEME.DARK
 let initialProviderLoaded = false
 let currentShortcut = 'Cmd+Shift+Space'
 let switchShortcut = 'Shift+Tab'
+let savedBounds = null // {x, y, width, height}
+let builtInColors = {} // { providerKey: { dark, light } }
 
 // ===== Settings Persistence =====
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
@@ -44,12 +51,24 @@ function loadSettings() {
   return null
 }
 
+function saveWindowBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const bounds = mainWindow.getBounds()
+  savedBounds = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+  saveSettings()
+}
+
 function saveSettings() {
   try {
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify({
       shortcut: currentShortcut,
       switchShortcut,
-      mode
+      mode,
+      enabledProviders,
+      customProviders,
+      providerOrder,
+      windowBounds: savedBounds,
+      builtInColors
     }))
   } catch (e) {}
 }
@@ -57,6 +76,76 @@ function saveSettings() {
 // ===== Helpers =====
 function getActiveWin() {
   return mode === MODE.MENUBAR ? popupWindow : mainWindow
+}
+
+// 获取合并后的服务商列表（内置已启用 + 自定义）
+function getMergedProviders() {
+  const builtIn = (enabledProviders
+    ? PROVIDERS.filter(p => enabledProviders.includes(p.key))
+    : [...PROVIDERS]
+  ).map(p => ({
+    ...p,
+    color: builtInColors[p.key] || p.color
+  }))
+  const custom = customProviders.map(p => ({
+    ...p,
+    icon: p.icon || generateLetterIcon(p.name),
+    color: p.color || { dark: '#1a1e28', light: '#f0f2f5' }
+  }))
+  const merged = [...builtIn, ...custom]
+  if (!providerOrder) return merged
+  // 按 providerOrder 排序，未在 order 中的排到末尾
+  const orderMap = new Map(providerOrder.map((k, i) => [k, i]))
+  merged.sort((a, b) => (orderMap.get(a.key) ?? 999) - (orderMap.get(b.key) ?? 999))
+  return merged
+}
+
+// 为自定义服务商生成首字母图标
+function generateLetterIcon(name) {
+  const letter = (name || '?').charAt(0).toUpperCase()
+  const colors = ['#5eead4','#f472b6','#a78bfa','#fb923c','#38bdf8','#4ade80','#facc15','#f87171']
+  const color = colors[letter.charCodeAt(0) % colors.length]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="${color}"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+}
+
+// 尝试单个 URL 获取图标
+function tryFetchIcon(iconUrl) {
+  return new Promise((resolve) => {
+    try {
+      const { net } = require('electron')
+      const request = net.request(iconUrl)
+      request.on('response', (response) => {
+        if (response.statusCode !== 200) { resolve(null); return }
+        const chunks = []
+        response.on('data', (chunk) => chunks.push(chunk))
+        response.on('end', () => {
+          const buf = Buffer.concat(chunks)
+          if (buf.length < 100) { resolve(null); return }
+          const mime = response.headers['content-type']?.[0] || 'image/x-icon'
+          resolve(`data:${mime};base64,${buf.toString('base64')}`)
+        })
+      })
+      request.on('error', () => resolve(null))
+      setTimeout(() => { try { request.abort() } catch(e){}; resolve(null) }, 3000)
+    } catch { resolve(null) }
+  })
+}
+
+// 获取网站 favicon，依次尝试多个常见路径
+async function fetchFavicon(siteUrl) {
+  const origin = new URL(siteUrl).origin
+  const candidates = [
+    `${origin}/favicon.ico`,
+    `${origin}/favicon.png`,
+    `${origin}/apple-touch-icon.png`,
+    `${origin}/apple-touch-icon-precomposed.png`,
+  ]
+  for (const url of candidates) {
+    const icon = await tryFetchIcon(url)
+    if (icon) return icon
+  }
+  return null
 }
 
 // 全局快捷键触发的 toggle 逻辑，两处调用复用
@@ -86,6 +175,11 @@ app.whenReady().then(() => {
   if (settings) {
     if (settings.shortcut) currentShortcut = settings.shortcut
     if (settings.switchShortcut) switchShortcut = settings.switchShortcut
+    if (settings.enabledProviders) enabledProviders = settings.enabledProviders
+    if (settings.customProviders) customProviders = settings.customProviders
+    if (settings.providerOrder) providerOrder = settings.providerOrder
+    if (settings.windowBounds) savedBounds = settings.windowBounds
+    if (settings.builtInColors) builtInColors = settings.builtInColors
   }
 
   // createTray() // 暂不启用托盘菜单
@@ -93,22 +187,83 @@ app.whenReady().then(() => {
   setupIPC()
   setupMenu()
   registerGlobalShortcut(currentShortcut)
+
+  // 自动更新（仅在打包后生效）
+  if (app.isPackaged) {
+    setupAutoUpdater()
+  }
 })
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
 
+// ===== Auto Updater =====
+let updateInfo = null
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    updateInfo = info
+    notifyRenderer('update-status', { status: 'available', version: info.version })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    notifyRenderer('update-status', { status: 'none' })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    notifyRenderer('update-status', { status: 'downloading', percent: progress.percent })
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    notifyRenderer('update-status', { status: 'downloaded' })
+  })
+
+  autoUpdater.on('error', (err) => {
+    notifyRenderer('update-status', { status: 'error', error: err.message })
+  })
+
+  // 启动后延迟检查更新
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+}
+
+function notifyRenderer(channel, data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data)
+  }
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.webContents.send(channel, data)
+  }
+}
+
+// ===== Validate Bounds =====
+function isValidBounds(bounds) {
+  if (!bounds) return false
+  const displays = screen.getAllDisplays()
+  return displays.some(d => {
+    const { x, y, width, height } = d.workArea
+    return bounds.x >= x - bounds.width + 100 &&
+           bounds.x <= x + width - 100 &&
+           bounds.y >= y &&
+           bounds.y <= y + height - 100
+  })
+}
+
 // ===== Create Main Window =====
 function createMainWindow() {
+  const defaultBounds = { width: 1000, height: 700 }
+  const bounds = isValidBounds(savedBounds)
+    ? { ...savedBounds, minWidth: 600, minHeight: 400 }
+    : { ...defaultBounds, minWidth: 600, minHeight: 400 }
+
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
-    minWidth: 600,
-    minHeight: 400,
+    ...bounds,
     show: false,
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 8, y: 6 },
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 8, y: 8 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -128,6 +283,7 @@ function createMainWindow() {
     }
   })
 
+  // 窗口大小变化时更新 BrowserView
   let resizeTimer = null
   mainWindow.on('resize', () => {
     if (resizeTimer) return
@@ -136,6 +292,18 @@ function createMainWindow() {
       updateBrowserViewBounds()
     }, 16)
   })
+
+  // 窗口移动/调整大小时延迟保存位置到磁盘
+  let boundsSaveTimer = null
+  const scheduleBoundsSave = () => {
+    if (boundsSaveTimer) clearTimeout(boundsSaveTimer)
+    boundsSaveTimer = setTimeout(() => {
+      boundsSaveTimer = null
+      saveWindowBounds()
+    }, 500)
+  }
+  mainWindow.on('resize', scheduleBoundsSave)
+  mainWindow.on('move', scheduleBoundsSave)
 
   mainWindow.on('close', (e) => {
     if (mode === MODE.MENUBAR) {
@@ -391,7 +559,7 @@ function destroyEdgeWindow() {
 
 // ===== Switch Provider (BrowserView 缓存，切换不销毁) =====
 function switchProvider(key) {
-  const provider = PROVIDERS.find(p => p.key === key)
+  const provider = getMergedProviders().find(p => p.key === key)
   if (!provider) return
 
   const win = getActiveWin()
@@ -428,8 +596,9 @@ function switchProvider(key) {
     // 切换服务商快捷键
     view.webContents.on('before-input-event', (event, input) => {
       if (!matchesKeyEvent(input, switchShortcut)) return
-      const idx = PROVIDERS.findIndex(p => p.key === currentProviderKey)
-      const next = PROVIDERS[(idx + 1) % PROVIDERS.length]
+      const allProviders = getMergedProviders()
+      const idx = allProviders.findIndex(p => p.key === currentProviderKey)
+      const next = allProviders[(idx + 1) % allProviders.length]
       if (next.key !== currentProviderKey) switchProvider(next.key)
     })
 
@@ -437,7 +606,20 @@ function switchProvider(key) {
       if (currentProviderKey === key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loaded' })
       }
-      view.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(() => {})
+      // 注入 no-drag，确保 BrowserView 内容可点击
+      view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(() => {})
+      // 对需要重载的服务商延迟注入主题，等页面 JS 初始化完成读取 localStorage
+      const themeDelay = NEEDS_THEME_RELOAD.has(key) ? 300 : 0
+      setTimeout(() => {
+        if (view.webContents && !view.webContents.isDestroyed()) {
+          view.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(() => {})
+        }
+      }, themeDelay)
+      // 页面加载完成后发送侧边栏颜色
+      if (provider.color) {
+        const sidebarColor = provider.color[currentTheme] || provider.color.dark
+        getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
+      }
     })
 
     view.webContents.on('did-fail-load', (e, errorCode, errorDesc) => {
@@ -459,11 +641,18 @@ function switchProvider(key) {
 
   currentProviderKey = key
   if (view.webContents && !view.webContents.isDestroyed()) {
+    view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(() => {})
     win.addBrowserView(view)
     updateBrowserViewBounds()
 
     if (!view.webContents.isLoading()) {
       getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loaded' })
+    }
+
+    // 发送侧边栏颜色
+    if (provider.color) {
+      const sidebarColor = provider.color[currentTheme] || provider.color.dark
+      getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
     }
   }
 }
@@ -485,8 +674,35 @@ function setupIPC() {
   })
 
   ipcMain.handle('get-mode', () => mode)
+  ipcMain.handle('get-version', () => app.getVersion())
   ipcMain.handle('get-current-provider', () => currentProviderKey)
-  ipcMain.handle('get-providers', () => PROVIDERS)
+  ipcMain.handle('get-providers', () => getMergedProviders())
+
+  // 服务商管理
+  ipcMain.handle('get-provider-settings', () => ({
+    builtIn: PROVIDERS.map(p => ({ key: p.key, name: p.name, url: p.url, icon: p.icon, color: builtInColors[p.key] || p.color })),
+    enabled: enabledProviders,
+    custom: customProviders,
+    order: providerOrder
+  }))
+  ipcMain.handle('save-provider-settings', (event, settings) => {
+    enabledProviders = settings.enabled
+    customProviders = settings.custom || []
+    if (settings.builtInColors) {
+      builtInColors = settings.builtInColors
+    }
+    saveSettings()
+    // 通知渲染进程刷新服务商列表
+    if (mainWindow) mainWindow.webContents.send('providers-updated', getMergedProviders())
+    if (popupWindow) popupWindow.webContents.send('providers-updated', getMergedProviders())
+  })
+
+  ipcMain.handle('save-provider-order', (event, order) => {
+    providerOrder = order
+    saveSettings()
+    if (mainWindow) mainWindow.webContents.send('providers-updated', getMergedProviders())
+    if (popupWindow) popupWindow.webContents.send('providers-updated', getMergedProviders())
+  })
 
   ipcMain.on('sidebar-state', (event, collapsed) => {
     SIDEBAR_COLLAPSED = collapsed
@@ -515,18 +731,76 @@ function setupIPC() {
 
   ipcMain.handle('get-shortcut', () => currentShortcut)
   ipcMain.handle('set-shortcut', (event, acc) => {
-    currentShortcut = acc
-    globalShortcut.unregisterAll()
-    if (acc) {
-      globalShortcut.register(acc, toggleWindowVisibility)
+    if (!acc) {
+      globalShortcut.unregisterAll()
+      currentShortcut = ''
+      saveSettings()
+      return { ok: true }
     }
-    saveSettings()
+    // 尝试注册新快捷键，检测冲突
+    globalShortcut.unregisterAll()
+    const registered = globalShortcut.register(acc, toggleWindowVisibility)
+    if (registered) {
+      currentShortcut = acc
+      saveSettings()
+      return { ok: true }
+    }
+    // 注册失败，恢复旧快捷键
+    if (currentShortcut) {
+      globalShortcut.register(currentShortcut, toggleWindowVisibility)
+    }
+    return { ok: false, error: '快捷键被占用或无效，请尝试其他组合' }
   })
 
   ipcMain.handle('get-switch-shortcut', () => switchShortcut)
   ipcMain.handle('set-switch-shortcut', (event, acc) => {
+    if (acc && acc === currentShortcut) {
+      return { ok: false, error: '与全局快捷键冲突，请选择其他组合' }
+    }
     switchShortcut = acc || 'Shift+Tab'
     saveSettings()
+    return { ok: true }
+  })
+
+  // 获取网站 favicon
+  ipcMain.handle('fetch-favicon', async (event, url) => {
+    return await fetchFavicon(url)
+  })
+
+  // 从 URL 获取图标（供设置页手动输入图标网址使用）
+  ipcMain.handle('fetch-icon-url', async (event, iconUrl) => {
+    return await tryFetchIcon(iconUrl)
+  })
+
+  // 剪贴板注入：将剪贴板内容粘贴到当前服务商的输入框
+  ipcMain.handle('inject-clipboard', async () => {
+    const text = clipboard.readText()
+    if (!text) return { ok: false, error: '剪贴板为空' }
+    const view = views.get(currentProviderKey)
+    if (!view || !view.webContents || view.webContents.isDestroyed()) {
+      return { ok: false, error: '服务商未加载' }
+    }
+    const selector = CHAT_INPUT_SELECTORS[currentProviderKey] || 'textarea, div[contenteditable="true"]'
+    try {
+      await view.webContents.executeJavaScript(`
+        (function() {
+          var el = document.querySelector('${selector}');
+          if (!el) return false;
+          el.focus();
+          if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+            el.value = ${JSON.stringify(text)};
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            el.textContent = ${JSON.stringify(text)};
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          return true;
+        })()
+      `)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: '注入失败：' + e.message }
+    }
   })
 
   ipcMain.on('move-window', (event, dx, dy) => {
@@ -552,10 +826,47 @@ function setupIPC() {
     if (view && view.webContents && !view.webContents?.isDestroyed()) {
       view.webContents.executeJavaScript(THEME_SCRIPTS[theme]).then(() => {
         if (NEEDS_THEME_RELOAD.has(currentProviderKey)) {
-          view.webContents.reload()
+          // 延迟刷新，确保 localStorage 已写入
+          setTimeout(() => {
+            if (view.webContents && !view.webContents.isDestroyed()) {
+              view.webContents.reload()
+            }
+          }, 100)
         }
       }).catch(() => {})
+      // 主题切换后更新侧边栏颜色
+      const provider = getMergedProviders().find(p => p.key === currentProviderKey)
+      if (provider?.color) {
+        const sidebarColor = provider.color[theme] || provider.color.dark
+        getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
+      }
     }
+  })
+
+  // 自动更新
+  ipcMain.handle('check-update', async () => {
+    if (!app.isPackaged) return { ok: false, error: '开发模式不支持更新' }
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      return { ok: true, hasUpdate: !!result }
+    } catch (e) {
+      return { ok: false, error: e.message }
+    }
+  })
+
+  ipcMain.handle('download-update', async () => {
+    if (!app.isPackaged) return { ok: false }
+    try {
+      await autoUpdater.downloadUpdate()
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e.message }
+    }
+  })
+
+  ipcMain.handle('install-update', () => {
+    if (!app.isPackaged) return
+    autoUpdater.quitAndInstall()
   })
 }
 

@@ -240,9 +240,9 @@
         transform: scale(0.95);
       }
 
-      /* 专注模式箭头翻转 */
-      #toggleFocus svg { transition: transform 0.2s ease; }
-      body.focus #toggleFocus svg { transform: rotate(180deg); }
+      /* 专注模式图标变化 */
+      #toggleFocus svg line { transition: opacity 0.2s ease; }
+      body.focus #toggleFocus svg line { opacity: 0; }
 
       /* ===== Loading Overlay ===== */
       .loading-overlay {
@@ -539,6 +539,410 @@
       [data-theme="light"] .settings-toggle {
         background: #d1d1d6;
       }
+
+      /* 服务商管理 */
+      .provider-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .provider-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+      }
+      .provider-item + .provider-item {
+        border-top: 1px solid var(--border);
+      }
+      .provider-item img {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        flex-shrink: 0;
+      }
+      .provider-item-info {
+        flex: 1;
+        min-width: 0;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: var(--radius-xs);
+        transition: background 0.15s;
+      }
+      .provider-item-info:hover {
+        background: var(--hover-bg);
+      }
+      .provider-item-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .provider-item-url {
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* 颜色选择器 */
+      .color-row {
+        display: flex;
+        gap: 12px;
+      }
+      .color-field {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .color-field label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .color-picker-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--border-strong);
+        background: var(--surface-2);
+        padding: 0 10px;
+      }
+      .color-picker-wrap input[type="color"] {
+        width: 24px;
+        height: 24px;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        background: transparent;
+      }
+      .color-picker-wrap span {
+        font-size: 12px;
+        color: var(--muted);
+        font-family: monospace;
+      }
+      .provider-checkbox {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        position: relative;
+        flex-shrink: 0;
+        transition: all 0.15s;
+      }
+      .provider-checkbox:checked {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .provider-checkbox:checked::after {
+        content: '';
+        position: absolute;
+        left: 5px;
+        top: 2px;
+        width: 5px;
+        height: 9px;
+        border: solid var(--brand-text);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+      .provider-delete {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: var(--radius-xs);
+        display: grid;
+        place-items: center;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+      .provider-delete:hover {
+        color: #f87171;
+        background: rgba(248,113,113,0.1);
+      }
+
+      .btn-sm {
+        height: 32px;
+        padding: 0 14px;
+        border-radius: var(--radius-xs);
+        border: none;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: var(--brand-text);
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+      }
+      .btn-ghost:hover {
+        color: var(--text);
+        background: var(--hover-bg);
+      }
+      .btn-add-provider {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s;
+        border-top: 1px solid var(--border);
+      }
+      .btn-add-provider:hover {
+        background: var(--hover-bg);
+      }
+
+      /* 添加服务商弹窗 */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 500;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.visible { display: flex; }
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        width: 380px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .modal-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .modal-close {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: var(--radius-xs);
+        display: grid;
+        place-items: center;
+        transition: all 0.15s;
+      }
+      .modal-close:hover { color: var(--text); background: var(--hover-bg); }
+      .modal-body {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .modal-field input[type="text"],
+      .modal-field input[type="url"] {
+        width: 100%;
+        height: 36px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--border-strong);
+        background: var(--surface-2);
+        color: var(--text);
+        font-size: 13px;
+        padding: 0 12px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .modal-field input:focus { border-color: var(--accent); }
+      .modal-field input::placeholder { color: var(--muted); }
+
+      /* 图标上传区 */
+      .icon-upload-area {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .icon-preview {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--radius);
+        border: 1px dashed var(--border-strong);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        flex-shrink: 0;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 20px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .icon-preview:hover { border-color: var(--accent); }
+      .icon-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .icon-options {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .icon-url-row {
+        display: flex;
+        gap: 6px;
+      }
+      .icon-url-row input {
+        flex: 1;
+        height: 32px;
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--border-strong);
+        background: var(--surface-2);
+        color: var(--text);
+        font-size: 12px;
+        padding: 0 10px;
+        outline: none;
+      }
+      .icon-url-row input:focus { border-color: var(--accent); }
+      .icon-url-row input::placeholder { color: var(--muted); }
+      .icon-hint {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 0 20px 20px;
+      }
+
+      /* 更新通知横幅 */
+      .update-banner {
+        position: fixed;
+        top: 0;
+        left: var(--sidebar-width);
+        right: 0;
+        padding: 8px 16px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
+        display: none;
+        align-items: center;
+        gap: 10px;
+        z-index: 300;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .update-banner.visible { display: flex; }
+      .update-banner-text { flex: 1; }
+      .update-banner-text strong { color: var(--accent); }
+      .update-banner-btn {
+        height: 28px;
+        padding: 0 12px;
+        border-radius: var(--radius-xs);
+        border: none;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .update-banner-btn.primary {
+        background: var(--accent);
+        color: var(--brand-text);
+      }
+      .update-banner-btn.primary:hover { opacity: 0.9; }
+      .update-banner-btn.ghost {
+        background: transparent;
+        color: var(--muted);
+      }
+      .update-banner-btn.ghost:hover { color: var(--text); }
+      .update-progress {
+        width: 100px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--faint);
+        overflow: hidden;
+      }
+      .update-progress-bar {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      /* 侧边栏加载状态指示器 */
+      .nav-item .nav-status {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .nav-item .nav-status.loading {
+        background: var(--accent);
+        animation: statusPulse 1s ease-in-out infinite;
+      }
+      .nav-item .nav-status.error {
+        background: #f87171;
+      }
+      @keyframes statusPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      .nav-item.dragging { opacity: 0.4; }
+      .nav-item.drag-over { background: var(--accent-dim); }
+      .nav-item.drag-over::before { display: none; }
+      .drag-handle {
+        cursor: grab;
+        color: var(--muted);
+        display: grid;
+        place-items: center;
+        padding: 2px;
+        flex-shrink: 0;
+        opacity: 0.4;
+        transition: opacity 0.15s;
+      }
+      .provider-item:hover .drag-handle { opacity: 0.8; }
+      .provider-item.dragging .drag-handle { cursor: grabbing; }
+      .provider-item.drag-over {
+        border-top: 2px solid var(--accent);
+      }
     </style>
     </style>
   </head>
@@ -555,11 +959,14 @@
           <button class="icon-btn" id="reloadFrame" data-tooltip="重载">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
+          <button class="icon-btn" id="pasteClipboard" data-tooltip="粘贴剪贴板">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+          </button>
         </div>
 
         <div class="sidebar-bottom">
           <button class="icon-btn" id="toggleFocus" data-tooltip="专注模式">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
           </button>
           <button class="icon-btn" id="toggleSettings" data-tooltip="设置">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -612,7 +1019,101 @@
               </div>
             </div>
           </div>
+          <div>
+            <div class="settings-group-title">服务商管理</div>
+            <div class="settings-group">
+              <div class="provider-list" id="providerList"></div>
+              <button class="btn-add-provider" id="btnAddProvider">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                添加自定义服务商
+              </button>
+            </div>
+          </div>
+          <div>
+            <div class="settings-group-title">关于</div>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label">MineAI Hub</div>
+                  <div class="settings-row-hint" id="appVersion">v1.0.3</div>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label">检查更新</div>
+                  <div class="settings-row-hint" id="updateHint">点击检查是否有新版本</div>
+                </div>
+                <button class="btn-sm btn-ghost" id="btnCheckUpdate">检查更新</button>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Add Provider Modal -->
+      <div class="modal-overlay" id="addProviderModal">
+        <div class="modal">
+          <div class="modal-header">
+            <span class="modal-title" id="modalTitle">添加自定义服务商</span>
+            <button class="modal-close" id="modalClose">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-field" id="modalFieldGroup">
+              <label>名称</label>
+              <input type="text" id="modalName" placeholder="例如：ChatGPT" maxlength="20">
+            </div>
+            <div class="modal-field" id="modalFieldUrl">
+              <label>网址</label>
+              <input type="url" id="modalUrl" placeholder="https://chat.openai.com">
+            </div>
+            <div class="modal-field" id="modalFieldIcon">
+              <label>图标</label>
+              <div class="icon-upload-area">
+                <div class="icon-preview" id="iconPreview" title="点击上传图片">?</div>
+                <div class="icon-options">
+                  <div class="icon-url-row">
+                    <input type="url" id="modalIconUrl" placeholder="图标网址（可选）">
+                    <button class="btn-sm btn-ghost" id="btnFetchIcon">获取</button>
+                  </div>
+                  <div class="icon-hint">点击左侧预览区上传本地图片，或输入图标网址后点击"获取"</div>
+                </div>
+              </div>
+              <input type="file" id="iconFileInput" accept="image/*" style="display:none">
+            </div>
+            <div class="color-row" id="modalColorRow">
+              <div class="color-field">
+                <label>暗色模式侧边栏</label>
+                <div class="color-picker-wrap">
+                  <input type="color" id="modalColorDark" value="#1a1e28">
+                  <span id="modalColorDarkHex">#1a1e28</span>
+                </div>
+              </div>
+              <div class="color-field">
+                <label>亮色模式侧边栏</label>
+                <div class="color-picker-wrap">
+                  <input type="color" id="modalColorLight" value="#f0f2f5">
+                  <span id="modalColorLightHex">#f0f2f5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-sm btn-ghost" id="modalCancel">取消</button>
+            <button class="btn-sm btn-primary" id="modalSave">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Update Banner -->
+      <div class="update-banner" id="updateBanner">
+        <div class="update-banner-text" id="updateBannerText">发现新版本</div>
+        <div class="update-progress" id="updateProgress" style="display:none">
+          <div class="update-progress-bar" id="updateProgressBar"></div>
+        </div>
+        <button class="update-banner-btn primary" id="btnUpdateAction">下载更新</button>
+        <button class="update-banner-btn ghost" id="btnUpdateDismiss">忽略</button>
       </div>
 
       <!-- Loading Overlay -->
@@ -636,6 +1137,7 @@
       let providers = []
       let currentProviderKey = 'deepseek'
       let isLoading = false
+      const providerStatus = new Map() // key -> 'loading' | 'error' | null
 
       // ===== DOM =====
       const $ = id => document.getElementById(id)
@@ -696,6 +1198,11 @@
       function setActive(key) {
         currentProviderKey = key
         renderNav()
+        // 切换服务商前先关闭设置页，避免 toggle-settings(show) 移除 BrowserView 导致点击失效
+        if (settingsPage.classList.contains('visible')) {
+          settingsPage.classList.remove('visible')
+          window.electronAPI.toggleSettings(false)
+        }
         window.electronAPI.switchProvider(key)
       }
 
@@ -715,6 +1222,13 @@
           img.style.height = '24px'
           img.style.borderRadius = '6px'
           btn.appendChild(img)
+          // 加载状态指示器
+          const status = providerStatus.get(x.key)
+          if (status) {
+            const dot = document.createElement('div')
+            dot.className = `nav-status ${status}`
+            btn.appendChild(dot)
+          }
           nav.appendChild(btn)
         })
       }
@@ -758,6 +1272,15 @@
         showStatus('已重载')
       })
 
+      $('pasteClipboard').addEventListener('click', async () => {
+        const result = await window.electronAPI.injectClipboard()
+        if (result.ok) {
+          toast('已粘贴剪贴板内容')
+        } else {
+          toast(result.error || '粘贴失败')
+        }
+      })
+
       $('toggleFocus').addEventListener('click', (e) => {
         e.stopPropagation()
         toggleFocus()
@@ -784,6 +1307,7 @@
         const isDark = Theme.get() === 'dark'
         settingsTheme.classList.toggle('on', isDark)
         $('settingsThemeHint').textContent = isDark ? '暗色' : '亮色'
+        await loadProviderSettings()
       }
 
       $('toggleSettings').addEventListener('click', () => {
@@ -834,11 +1358,18 @@
         shortcutInput.classList.remove('recording')
         if (shortcutKeys.length > 1) {
           const acc = shortcutKeys.join('+')
-          await window.electronAPI.setShortcut(acc)
-          shortcutInput.textContent = shortcutDisplay(shortcutKeys)
-          toast('快捷键已更新')
+          const result = await window.electronAPI.setShortcut(acc)
+          if (result && result.ok) {
+            shortcutInput.textContent = shortcutDisplay(shortcutKeys)
+            toast('快捷键已更新')
+          } else {
+            toast(result?.error || '快捷键设置失败')
+            const s = await window.electronAPI.getShortcut()
+            shortcutInput.textContent = s || '未设置'
+          }
         } else {
-          loadShortcut()
+          const s = await window.electronAPI.getShortcut()
+          shortcutInput.textContent = s || '未设置'
         }
       })
 
@@ -867,13 +1398,366 @@
         switchShortcutInput.classList.remove('recording')
         if (switchShortcutKeys.length > 1) {
           const acc = switchShortcutKeys.join('+')
-          await window.electronAPI.setSwitchShortcut(acc)
-          switchShortcutInput.textContent = shortcutDisplay(switchShortcutKeys)
-          switchShortcut = acc
-          toast('切换快捷键已更新')
+          const result = await window.electronAPI.setSwitchShortcut(acc)
+          if (result && result.ok) {
+            switchShortcutInput.textContent = shortcutDisplay(switchShortcutKeys)
+            switchShortcut = acc
+            toast('切换快捷键已更新')
+          } else {
+            toast(result?.error || '快捷键设置失败')
+            const s = await window.electronAPI.getSwitchShortcut()
+            switchShortcutInput.textContent = s || '未设置'
+          }
         } else {
           const s = await window.electronAPI.getSwitchShortcut()
           switchShortcutInput.textContent = s || '未设置'
+        }
+      })
+
+      // ===== Provider Management =====
+      let providerSettings = { builtIn: [], enabled: null, custom: [] }
+
+      async function loadProviderSettings() {
+        providerSettings = await window.electronAPI.getProviderSettings()
+        renderProviderList()
+      }
+
+      let dragSrcEl = null
+
+      function renderProviderList() {
+        const list = $('providerList')
+        list.innerHTML = ''
+        const { builtIn, enabled, custom } = providerSettings
+
+        // 合并为一个有序列表
+        const allItems = []
+        const currentTheme = document.documentElement.dataset.theme || 'dark'
+        builtIn.forEach(p => {
+          const isChecked = enabled === null || enabled.includes(p.key)
+          allItems.push({ type: 'builtin', key: p.key, name: p.name, url: p.url, icon: p.icon, color: p.color, checked: isChecked })
+        })
+        custom.forEach((p, i) => {
+          allItems.push({ type: 'custom', key: p.key, name: p.name, url: p.url, icon: p.icon, color: p.color || { dark: '#1a1e28', light: '#f0f2f5' }, index: i, checked: true })
+        })
+
+        // 按保存的顺序排序
+        if (providerSettings.order) {
+          const orderMap = new Map(providerSettings.order.map((k, i) => [k, i]))
+          allItems.sort((a, b) => (orderMap.get(a.key) ?? 999) - (orderMap.get(b.key) ?? 999))
+        }
+
+        allItems.forEach(item => {
+          const el = document.createElement('div')
+          el.className = 'provider-item'
+          el.draggable = true
+          el.dataset.key = item.key
+
+          const iconHtml = item.icon
+            ? `<img src="${item.icon}" alt="${item.name}">`
+            : `<div style="width:28px;height:28px;border-radius:6px;background:var(--surface-3);display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">${(item.name||'?')[0].toUpperCase()}</div>`
+          const deleteHtml = item.type === 'custom'
+            ? `<button class="provider-delete" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
+            : ''
+          el.innerHTML = `
+            <div class="drag-handle" title="拖拽排序">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/></svg>
+            </div>
+            <input type="checkbox" class="provider-checkbox" ${item.checked ? 'checked' : ''}>
+            ${iconHtml}
+            <div class="provider-item-info" data-key="${item.key}" data-type="${item.type}" data-index="${item.index ?? ''}">
+              <div class="provider-item-name">${item.name}</div>
+              <div class="provider-item-url">${item.url}</div>
+            </div>
+            ${deleteHtml}
+          `
+
+          // 复选框
+          el.querySelector('.provider-checkbox').addEventListener('change', (e) => {
+            if (item.type === 'builtin') {
+              toggleBuiltInProvider(item.key, e.target.checked)
+            }
+          })
+
+          // 点击服务商信息打开编辑弹窗
+          el.querySelector('.provider-item-info').addEventListener('click', () => {
+            openEditModal(item)
+          })
+
+          // 删除按钮
+          if (item.type === 'custom') {
+            el.querySelector('.provider-delete').addEventListener('click', () => {
+              el.remove()
+              deleteCustomProvider(item.index)
+            })
+          }
+
+          // 拖拽事件
+          el.addEventListener('dragstart', (e) => {
+            dragSrcEl = el
+            el.classList.add('dragging')
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', item.key)
+          })
+          el.addEventListener('dragend', () => {
+            el.classList.remove('dragging')
+            list.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'))
+            dragSrcEl = null
+          })
+          el.addEventListener('dragover', (e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            if (el !== dragSrcEl) el.classList.add('drag-over')
+          })
+          el.addEventListener('dragleave', () => {
+            el.classList.remove('drag-over')
+          })
+          el.addEventListener('drop', (e) => {
+            e.preventDefault()
+            el.classList.remove('drag-over')
+            if (!dragSrcEl || el === dragSrcEl) return
+            // 重新排列 DOM
+            const items = [...list.children]
+            const fromIdx = items.indexOf(dragSrcEl)
+            const toIdx = items.indexOf(el)
+            if (fromIdx < toIdx) {
+              list.insertBefore(dragSrcEl, el.nextSibling)
+            } else {
+              list.insertBefore(dragSrcEl, el)
+            }
+            // 保存新顺序
+            saveProviderOrderFromDOM()
+          })
+
+          list.appendChild(el)
+        })
+      }
+
+      function saveProviderOrderFromDOM() {
+        const list = $('providerList')
+        const order = [...list.children].map(el => el.dataset.key)
+        // 同时读取当前勾选状态
+        const checked = [...list.querySelectorAll('.provider-checkbox:checked')].map(cb => cb.closest('.provider-item').dataset.key)
+        const enabledBuiltIn = providerSettings.builtIn.map(p => p.key).filter(k => checked.includes(k))
+        window.electronAPI.saveProviderOrder(order)
+        providerSettings.enabled = enabledBuiltIn
+        window.electronAPI.saveProviderSettings({ enabled: enabledBuiltIn, custom: providerSettings.custom })
+      }
+
+      function toggleBuiltInProvider(key, enabled) {
+        let { enabled: current } = providerSettings
+        if (current === null) {
+          current = providerSettings.builtIn.map(p => p.key)
+        }
+        if (enabled) {
+          if (!current.includes(key)) current.push(key)
+        } else {
+          current = current.filter(k => k !== key)
+        }
+        providerSettings.enabled = current
+        saveProviderOrderFromDOM()
+      }
+
+      function deleteCustomProvider(index) {
+        providerSettings.custom.splice(index, 1)
+        saveProviderOrderFromDOM()
+      }
+
+      async function saveProviderSettings() {
+        return window.electronAPI.saveProviderSettings({
+          enabled: providerSettings.enabled,
+          custom: providerSettings.custom,
+          builtInColors: providerSettings.builtIn.reduce((acc, p) => {
+            if (p.color) acc[p.key] = p.color
+            return acc
+          }, {})
+        })
+      }
+
+      // ===== 弹窗：添加/编辑服务商 =====
+      let modalIconData = null
+      let modalMode = 'add' // 'add' | 'edit'
+      let modalEditTarget = null // { key, type, index }
+
+      function openModal() {
+        modalMode = 'add'
+        modalEditTarget = null
+        $('modalTitle').textContent = '添加自定义服务商'
+        $('modalSave').textContent = '添加'
+        // 显示所有字段
+        $('modalFieldGroup').style.display = ''
+        $('modalFieldUrl').style.display = ''
+        $('modalFieldIcon').style.display = ''
+        $('modalColorRow').style.display = ''
+        // 清空
+        $('modalName').value = ''
+        $('modalUrl').value = ''
+        $('modalIconUrl').value = ''
+        modalIconData = null
+        $('iconPreview').innerHTML = '?'
+        $('modalColorDark').value = '#1a1e28'
+        $('modalColorDarkHex').textContent = '#1a1e28'
+        $('modalColorLight').value = '#f0f2f5'
+        $('modalColorLightHex').textContent = '#f0f2f5'
+        $('addProviderModal').classList.add('visible')
+        $('modalName').focus()
+      }
+
+      function openEditModal(item) {
+        modalMode = 'edit'
+        modalEditTarget = { key: item.key, type: item.type, index: item.index }
+        const isBuiltin = item.type === 'builtin'
+
+        $('modalTitle').textContent = isBuiltin ? `编辑 ${item.name}` : `编辑服务商`
+        $('modalSave').textContent = '保存'
+
+        // 内置服务商只显示颜色，自定义显示全部
+        $('modalFieldGroup').style.display = isBuiltin ? 'none' : ''
+        $('modalFieldUrl').style.display = isBuiltin ? 'none' : ''
+        $('modalFieldIcon').style.display = isBuiltin ? 'none' : ''
+        $('modalColorRow').style.display = ''
+
+        // 填充数据
+        $('modalName').value = item.name || ''
+        $('modalUrl').value = item.url || ''
+        $('modalIconUrl').value = ''
+        modalIconData = null
+        if (item.icon && item.icon.startsWith('data:')) {
+          $('iconPreview').innerHTML = `<img src="${item.icon}">`
+        } else {
+          $('iconPreview').innerHTML = item.name ? item.name[0].toUpperCase() : '?'
+        }
+
+        const color = item.color || { dark: '#1a1e28', light: '#f0f2f5' }
+        $('modalColorDark').value = color.dark || '#1a1e28'
+        $('modalColorDarkHex').textContent = color.dark || '#1a1e28'
+        $('modalColorLight').value = color.light || '#f0f2f5'
+        $('modalColorLightHex').textContent = color.light || '#f0f2f5'
+
+        $('addProviderModal').classList.add('visible')
+      }
+
+      function closeModal() {
+        $('addProviderModal').classList.remove('visible')
+      }
+
+      // 颜色选择器同步 hex 显示
+      $('modalColorDark').addEventListener('input', (e) => {
+        $('modalColorDarkHex').textContent = e.target.value
+      })
+      $('modalColorLight').addEventListener('input', (e) => {
+        $('modalColorLightHex').textContent = e.target.value
+      })
+
+      $('btnAddProvider').addEventListener('click', openModal)
+      $('modalClose').addEventListener('click', closeModal)
+      $('modalCancel').addEventListener('click', closeModal)
+      $('addProviderModal').addEventListener('click', (e) => {
+        if (e.target === $('addProviderModal')) closeModal()
+      })
+
+      // 图标预览点击上传
+      $('iconPreview').addEventListener('click', () => $('iconFileInput').click())
+      $('iconFileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = () => {
+          modalIconData = reader.result
+          $('iconPreview').innerHTML = `<img src="${modalIconData}">`
+        }
+        reader.readAsDataURL(file)
+      })
+
+      // 从 URL 获取图标（通过主进程，绕过 CSP）
+      $('btnFetchIcon').addEventListener('click', async () => {
+        let iconUrl = $('modalIconUrl').value.trim()
+        if (!iconUrl) { toast('请输入图标网址'); return }
+        if (!/^https?:\/\//.test(iconUrl)) iconUrl = 'https://' + iconUrl
+        $('btnFetchIcon').textContent = '…'
+        $('btnFetchIcon').disabled = true
+        const result = await window.electronAPI.fetchIconUrl(iconUrl)
+        if (result) {
+          modalIconData = result
+          $('iconPreview').innerHTML = `<img src="${modalIconData}">`
+          toast('图标已获取')
+        } else {
+          toast('获取图标失败，请检查网址')
+        }
+        $('btnFetchIcon').textContent = '获取'
+        $('btnFetchIcon').disabled = false
+      })
+
+      // 保存
+      $('modalSave').addEventListener('click', async () => {
+        const colorDark = $('modalColorDark').value
+        const colorLight = $('modalColorLight').value
+        const newColor = { dark: colorDark, light: colorLight }
+
+        if (modalMode === 'add') {
+          // 添加模式
+          const name = $('modalName').value.trim()
+          let url = $('modalUrl').value.trim()
+          if (!name || !url) { toast('请填写名称和网址'); return }
+          if (!/^https?:\/\//.test(url)) url = 'https://' + url
+          const btn = $('modalSave')
+          btn.textContent = '添加中…'
+          btn.disabled = true
+          let icon = modalIconData
+          if (!icon) {
+            icon = await window.electronAPI.fetchFavicon(url)
+          }
+          const key = 'custom_' + Date.now()
+          providerSettings.custom.push({ key, name, url, icon: icon || null, color: newColor })
+          saveProviderOrderFromDOM()
+          closeModal()
+          btn.textContent = '添加'
+          btn.disabled = false
+          toast(`已添加 ${name}`)
+        } else {
+          // 编辑模式
+          const { key, type, index } = modalEditTarget
+          if (type === 'builtin') {
+            const p = providerSettings.builtIn.find(x => x.key === key)
+            if (p) {
+              p.color = newColor
+            }
+            await saveProviderSettings()
+          } else {
+            const p = providerSettings.custom[index]
+            if (p) {
+              const name = $('modalName').value.trim()
+              let url = $('modalUrl').value.trim()
+              if (!name || !url) { toast('请填写名称和网址'); return }
+              if (!/^https?:\/\//.test(url)) url = 'https://' + url
+              p.name = name
+              p.url = url
+              p.color = newColor
+              if (modalIconData) p.icon = modalIconData
+            }
+            saveProviderOrderFromDOM()
+          }
+          closeModal()
+          toast('已保存')
+          // 如果当前服务商颜色被修改，即时更新侧边栏
+          if (key === currentProviderKey) {
+            const currentTheme = document.documentElement.dataset.theme || 'dark'
+            const sidebarColor = newColor[currentTheme] || newColor.dark
+            document.querySelector('.sidebar').style.background = sidebarColor
+          }
+        }
+      })
+
+      // 监听服务商列表更新
+      window.electronAPI.onProvidersUpdated((updatedProviders) => {
+        providers = updatedProviders
+        renderNav()
+        // 同步刷新设置页服务商列表
+        if ($('settingsPage').classList.contains('visible')) {
+          loadProviderSettings()
+        }
+        // 如果当前选中的服务商被移除，切换到第一个
+        if (!providers.find(p => p.key === currentProviderKey) && providers.length > 0) {
+          setActive(providers[0].key)
         }
       })
 
@@ -881,11 +1765,17 @@
       window.electronAPI.onLoading((data) => {
         const { provider, status, error } = data
         if (status === 'loading') {
+          providerStatus.set(provider, 'loading')
+          renderNav()
           const p = providers.find(x => x.key === provider)
           showLoading(p ? `正在加载 ${p.name}…` : '正在加载…')
         } else if (status === 'loaded') {
+          providerStatus.delete(provider)
+          renderNav()
           hideLoading()
         } else if (status === 'error') {
+          providerStatus.set(provider, 'error')
+          renderNav()
           hideLoading()
           toast(`加载失败：${error || '未知错误'}`)
         }
@@ -895,12 +1785,22 @@
         document.body.dataset.mode = mode
       })
 
+      // 同步侧边栏颜色
+      window.electronAPI.onSidebarColor((color) => {
+        const sidebar = document.querySelector('.sidebar')
+        if (sidebar) sidebar.style.background = color
+      })
+
       // ===== Init =====
       async function init() {
         providers = await window.electronAPI.getProviders()
         currentProviderKey = await window.electronAPI.getCurrentProvider()
         const mode = await window.electronAPI.getMode()
         document.body.dataset.mode = mode
+
+        // 显示版本号
+        const version = await window.electronAPI.getVersion()
+        $('appVersion').textContent = `v${version}`
 
         renderNav()
         Theme.apply()
@@ -938,6 +1838,93 @@
         if (matchShortcut(e, switchShortcut)) {
           e.preventDefault()
           cycleProvider()
+        }
+      })
+
+      // ===== Auto Update =====
+      const updateBanner = $('updateBanner')
+      const updateBannerText = $('updateBannerText')
+      const updateProgress = $('updateProgress')
+      const updateProgressBar = $('updateProgressBar')
+      const btnUpdateAction = $('btnUpdateAction')
+      const btnUpdateDismiss = $('btnUpdateDismiss')
+
+      btnUpdateDismiss.addEventListener('click', () => {
+        updateBanner.classList.remove('visible')
+      })
+
+      btnUpdateAction.addEventListener('click', async () => {
+        const text = btnUpdateAction.textContent
+        if (text === '下载更新') {
+          btnUpdateAction.textContent = '下载中…'
+          btnUpdateAction.disabled = true
+          await window.electronAPI.downloadUpdate()
+        } else if (text === '安装并重启') {
+          window.electronAPI.installUpdate()
+        }
+      })
+
+      // 设置页检查更新按钮
+      $('btnCheckUpdate').addEventListener('click', async () => {
+        const btn = $('btnCheckUpdate')
+        const hint = $('updateHint')
+        btn.textContent = '检查中…'
+        btn.disabled = true
+        hint.textContent = '正在连接更新服务器…'
+        const result = await window.electronAPI.checkUpdate()
+        if (!result.ok) {
+          hint.textContent = result.error || '检查失败'
+          btn.textContent = '检查更新'
+          btn.disabled = false
+        }
+        // 有更新时由 onUpdateStatus 回调处理
+      })
+
+      window.electronAPI.onUpdateStatus((data) => {
+        const btn = $('btnCheckUpdate')
+        const hint = $('updateHint')
+        if (data.status === 'available') {
+          // 设置页
+          hint.textContent = `新版本 v${data.version} 可用`
+          btn.textContent = '下载更新'
+          btn.disabled = false
+          btn.onclick = () => { btn.textContent = '下载中…'; btn.disabled = true; window.electronAPI.downloadUpdate() }
+          // 横幅
+          updateBannerText.innerHTML = `发现新版本 <strong>v${data.version}</strong>`
+          btnUpdateAction.textContent = '下载更新'
+          btnUpdateAction.disabled = false
+          updateProgress.style.display = 'none'
+          updateBanner.classList.add('visible')
+        } else if (data.status === 'none') {
+          hint.textContent = '已是最新版本'
+          btn.textContent = '检查更新'
+          btn.disabled = false
+        } else if (data.status === 'downloading') {
+          hint.textContent = `正在下载… ${Math.round(data.percent)}%`
+          btn.textContent = '下载中…'
+          btn.disabled = true
+          updateBannerText.textContent = '正在下载更新…'
+          updateProgress.style.display = 'block'
+          updateProgressBar.style.width = `${Math.round(data.percent)}%`
+          btnUpdateAction.style.display = 'none'
+        } else if (data.status === 'downloaded') {
+          hint.textContent = '更新已就绪，重启即可安装'
+          btn.textContent = '安装并重启'
+          btn.disabled = false
+          btn.onclick = () => window.electronAPI.installUpdate()
+          updateBannerText.textContent = '更新已下载，重启即可安装'
+          updateProgress.style.display = 'none'
+          btnUpdateAction.textContent = '安装并重启'
+          btnUpdateAction.disabled = false
+          btnUpdateAction.style.display = ''
+        } else if (data.status === 'error') {
+          hint.textContent = `检查失败：${data.error}`
+          btn.textContent = '检查更新'
+          btn.disabled = false
+          updateBannerText.textContent = `更新检查失败：${data.error}`
+          btnUpdateAction.style.display = 'none'
+          updateProgress.style.display = 'none'
+          setTimeout(() => updateBanner.classList.remove('visible'), 5000)
         }
       })
 

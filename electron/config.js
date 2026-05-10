@@ -7,19 +7,31 @@ const iconBaseDir = app.isPackaged
   ? path.join(process.resourcesPath, 'assets')
   : path.join(__dirname, '..', 'assets')
 function loadIcon(name) {
-  return `data:image/png;base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
+  const ext = path.extname(name).toLowerCase()
+  const mimeMap = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
+  const mime = mimeMap[ext] || 'image/png'
+  return `data:${mime};base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
 }
 
 // ===== Providers =====
 const PROVIDERS = [
-  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png') },
-  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png') },
-  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png') },
-  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png') }
+  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png'), color: { dark: '#151517', light: '#ffffff' } },
+  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png'), color: { dark: '#1f1f1f', light: '#f9f9f9' } },
+  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png'), color: { dark: '#151616', light: '#ffffff' } },
+  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png'), color: { dark: '#16181e', light: '#fbfbfa' } },
+  { key: 'qianwen',  name: '千问',     url: 'https://www.qianwen.com/',      icon: loadIcon('qianwen.png'), color: { dark: '#111112', light: '#f7f7f9' } },
+  { key: 'minimax',  name: 'MiniMax',  url: 'https://agent.minimaxi.com/',   icon: loadIcon('minimax.png'), color: { dark: '#171717', light: '#ffffff' } },
+  { key: 'zhipu',    name: '智谱',     url: 'https://chat.z.ai/',            icon: loadIcon('zhipu.svg'), color: { dark: '#161616', light: '#f8f8f8' } }
 ]
 
 // 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载
-const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso'])
+const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso', 'minimax'])
+
+// 各服务商聊天输入框选择器（用于剪贴板注入，未列出的使用默认选择器）
+const CHAT_INPUT_SELECTORS = {
+  // 当前所有服务商都使用默认选择器，如需特殊处理在此覆盖
+  // deepseek: 'textarea.ChatInput...',
+}
 
 // ===== Constants =====
 const MODE = { WINDOW: 'window', MENUBAR: 'menubar' }
@@ -82,5 +94,6 @@ module.exports = {
   POPUP_HEIGHT,
   THEME_BG,
   THEME_SCRIPTS,
+  CHAT_INPUT_SELECTORS,
   matchesKeyEvent
 }

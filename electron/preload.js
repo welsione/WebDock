@@ -14,15 +14,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 获取当前模式
   getMode: () => ipcRenderer.invoke('get-mode'),
 
+  // 获取版本号
+  getVersion: () => ipcRenderer.invoke('get-version'),
+
   // 获取当前服务
   getCurrentProvider: () => ipcRenderer.invoke('get-current-provider'),
 
   // 获取所有服务
   getProviders: () => ipcRenderer.invoke('get-providers'),
 
+  // 服务商管理
+  getProviderSettings: () => ipcRenderer.invoke('get-provider-settings'),
+  saveProviderSettings: (settings) => ipcRenderer.invoke('save-provider-settings', settings),
+  saveProviderOrder: (order) => ipcRenderer.invoke('save-provider-order', order),
+  onProvidersUpdated: (callback) => {
+    ipcRenderer.on('providers-updated', (event, providers) => callback(providers))
+  },
+
   // 监听加载状态
   onLoading: (callback) => {
     ipcRenderer.on('loading', (event, data) => callback(data))
+  },
+
+  // 监听侧边栏颜色
+  onSidebarColor: (callback) => {
+    ipcRenderer.on('sidebar-color', (event, color) => callback(color))
   },
 
   // 监听模式变化
@@ -50,5 +66,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSwitchShortcut: (acc) => ipcRenderer.invoke('set-switch-shortcut', acc),
 
   // 设置页面显隐
-  toggleSettings: (show) => ipcRenderer.send('toggle-settings', show)
+  toggleSettings: (show) => ipcRenderer.send('toggle-settings', show),
+
+  // 剪贴板注入
+  injectClipboard: () => ipcRenderer.invoke('inject-clipboard'),
+
+  // 获取网站图标
+  fetchFavicon: (url) => ipcRenderer.invoke('fetch-favicon', url),
+  fetchIconUrl: (url) => ipcRenderer.invoke('fetch-icon-url', url),
+
+  // 自动更新
+  checkUpdate: () => ipcRenderer.invoke('check-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (event, data) => callback(data))
+  }
 })

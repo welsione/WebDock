@@ -4,6 +4,11 @@ directories:
   output: release
   buildResources: assets
 
+publish:
+  provider: github
+  owner: welsione
+  repo: MineAI-Hub
+
 asar: true
 
 extraResources:
@@ -11,6 +16,7 @@ extraResources:
     to: "assets"
     filter:
       - "*.png"
+      - "*.svg"
 
 files:
   - "electron/**/*"
