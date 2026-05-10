@@ -1,40 +1,24 @@
 const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme, globalShortcut } = require('electron')
 const path = require('path')
-const fs = require('fs')
-
-// ===== Providers =====
-// base64 data URL，路径区分开发/打包
-const iconBaseDir = app.isPackaged
-  ? path.join(process.resourcesPath, 'assets')
-  : path.join(__dirname, '..', 'assets')
-function loadIcon(name) {
-  return `data:image/png;base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
-}
-const PROVIDERS = [
-  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png') },
-  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png') },
-  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png') },
-  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png') }
-]
-
-// 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载
-const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso'])
-
-// ===== Constants =====
-const MODE = { WINDOW: 'window', MENUBAR: 'menubar' }
-const THEME = { DARK: 'dark', LIGHT: 'light' }
-const SIDEBAR_WIDTH = 74
-const EDGE_WIDTH = 0
-const EDGE_PILL_WIDTH = 16
-const EDGE_PILL_HEIGHT = 48
-const POPUP_WIDTH = 500
-const POPUP_HEIGHT = 700
+const {
+  PROVIDERS,
+  NEEDS_THEME_RELOAD,
+  MODE,
+  THEME,
+  SIDEBAR_WIDTH,
+  EDGE_WIDTH,
+  EDGE_PILL_WIDTH,
+  EDGE_PILL_HEIGHT,
+  POPUP_WIDTH,
+  POPUP_HEIGHT,
+  THEME_SCRIPTS
+} = require('./config')
 
 // ===== State =====
 let mainWindow = null
 let popupWindow = null
 let tray = null
-const views = new Map() // providerKey → BrowserView 缓存，切换不销毁
+const views = new Map() // providerKey -> BrowserView 缓存，切换不销毁
 let currentProviderKey = 'deepseek'
 let mode = MODE.WINDOW
 let SIDEBAR_COLLAPSED = false
@@ -49,31 +33,27 @@ function getActiveWin() {
   return mode === MODE.MENUBAR ? popupWindow : mainWindow
 }
 
-// 预计算主题注入脚本，避免每次构建字符串
-const THEME_BG = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
-
-const THEME_SCRIPTS = {
-  [THEME.DARK]: `(function(){var t='dark';var k=['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'];k.forEach(function(x){try{localStorage.setItem(x,t)}catch(e){}});document.documentElement.setAttribute('data-theme',t);document.documentElement.classList.add('dark');document.documentElement.classList.remove('light');try{window.dispatchEvent(new StorageEvent('storage',{key:'theme',newValue:t}))}catch(e){}})()`,
-  [THEME.LIGHT]: `(function(){var t='light';var k=['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'];k.forEach(function(x){try{localStorage.setItem(x,t)}catch(e){}});document.documentElement.setAttribute('data-theme',t);document.documentElement.classList.add('light');document.documentElement.classList.remove('dark');try{window.dispatchEvent(new StorageEvent('storage',{key:'theme',newValue:t}))}catch(e){}})()`
+// 全局快捷键触发的 toggle 逻辑，两处调用复用
+function toggleWindowVisibility() {
+  const win = mainWindow
+  if (!win) { showMainWindow(); return }
+  if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
+    if (mode === MODE.MENUBAR && popupWindow) popupWindow.hide()
+    else win.hide()
+  } else {
+    showMainWindow()
+  }
 }
 
-// ===== App Ready =====
+// ===== Global Shortcut =====
 function registerGlobalShortcut(acc) {
   globalShortcut.unregisterAll()
   if (!acc) return
-  const registered = globalShortcut.register(acc, () => {
-    const win = mainWindow
-    if (!win) { showMainWindow(); return }
-    if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
-      if (mode === MODE.MENUBAR && popupWindow) popupWindow.hide()
-      else win.hide()
-    } else {
-      showMainWindow()
-    }
-  })
+  const registered = globalShortcut.register(acc, toggleWindowVisibility)
   if (!registered) console.error('Failed to register global shortcut:', acc)
 }
 
+// ===== App Ready =====
 app.whenReady().then(() => {
   createTray()
   createMainWindow()
@@ -93,7 +73,7 @@ function createMainWindow() {
     height: 700,
     minWidth: 600,
     minHeight: 400,
-    show: false, // 先不显示，等加载完成
+    show: false,
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 8, y: 6 },
     webPreferences: {
@@ -109,14 +89,12 @@ function createMainWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
 
-  // 窗口准备好后显示；首次服务加载等待渲染进程发送初始主题后再触发
   mainWindow.once('ready-to-show', () => {
     if (mode === MODE.WINDOW) {
       mainWindow.show()
     }
   })
 
-  // 窗口尺寸变化时调整 BrowserView（debounce 避免高频触发）
   let resizeTimer = null
   mainWindow.on('resize', () => {
     if (resizeTimer) return
@@ -206,7 +184,6 @@ function togglePopup() {
     popupWindow.show()
     popupWindow.focus()
 
-    // 确保当前服务已加载
     if (!views.has(currentProviderKey)) {
       switchProvider(currentProviderKey)
     }
@@ -219,11 +196,9 @@ function positionPopup() {
   const trayBounds = tray.getBounds()
   const popupWidth = POPUP_WIDTH
 
-  // 计算位置：居中对齐托盘图标
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - popupWidth / 2)
   let y = Math.round(trayBounds.y + trayBounds.height + 4)
 
-  // 确保不超出屏幕边界
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
   const workArea = display.workArea
 
@@ -243,7 +218,6 @@ function showMainWindow() {
   mainWindow.show()
   mainWindow.focus()
 
-  // 确保当前服务已加载
   if (!views.has(currentProviderKey)) {
     switchProvider(currentProviderKey)
   }
@@ -260,15 +234,9 @@ function setMode(newMode) {
     if (mainWindow) mainWindow.hide()
   }
 
-  // 通知渲染进程
-  if (mainWindow) {
-    mainWindow.webContents.send('mode-changed', mode)
-  }
-  if (popupWindow) {
-    popupWindow.webContents.send('mode-changed', mode)
-  }
+  if (mainWindow) mainWindow.webContents.send('mode-changed', mode)
+  if (popupWindow) popupWindow.webContents.send('mode-changed', mode)
 
-  // 更新托盘菜单
   updateTrayMenu()
 }
 
@@ -301,17 +269,13 @@ function updateBrowserViewBounds() {
   if (!win) return
 
   const contentBounds = win.getContentBounds()
-
   const effectiveSidebarWidth = SIDEBAR_COLLAPSED ? EDGE_WIDTH : SIDEBAR_WIDTH
-  const viewWidth = contentBounds.width - effectiveSidebarWidth
-  const viewHeight = contentBounds.height
-  const viewY = contentBounds.y - win.getBounds().y
 
   view.setBounds({
     x: effectiveSidebarWidth,
-    y: Math.max(0, viewY),
-    width: viewWidth,
-    height: viewHeight
+    y: Math.max(0, contentBounds.y - win.getBounds().y),
+    width: contentBounds.width - effectiveSidebarWidth,
+    height: contentBounds.height
   })
 
   if (SIDEBAR_COLLAPSED) {
@@ -321,7 +285,7 @@ function updateBrowserViewBounds() {
   }
 }
 
-// 创建边缘条窗口（悬浮腰圆条，类似 iOS 底部横条）
+// 创建边缘条窗口
 function createEdgeWindow(parentWin) {
   if (edgeWindow) return
 
@@ -351,9 +315,8 @@ function createEdgeWindow(parentWin) {
     query: { theme: currentTheme }
   })
 
-  // 跟随父窗口移动和调整大小（debounce）
   let edgeMoveTimer = null
-  const debouncedUpdateEdge = () => {
+  const updateEdge = () => {
     if (edgeMoveTimer) return
     edgeMoveTimer = setTimeout(() => {
       edgeMoveTimer = null
@@ -361,11 +324,11 @@ function createEdgeWindow(parentWin) {
       updateEdgeWindowPosition()
     }, 16)
   }
-  parentWin.on('move', debouncedUpdateEdge)
-  parentWin.on('resize', debouncedUpdateEdge)
+  parentWin.on('move', updateEdge)
+  parentWin.on('resize', updateEdge)
   edgeWindow._cleanup = () => {
-    parentWin.removeListener('move', debouncedUpdateEdge)
-    parentWin.removeListener('resize', debouncedUpdateEdge)
+    parentWin.removeListener('move', updateEdge)
+    parentWin.removeListener('resize', updateEdge)
   }
 }
 
@@ -417,9 +380,9 @@ function switchProvider(key) {
     views.set(key, view)
 
     view.webContents.loadURL(provider.url)
-    win.webContents.send('loading', { provider: key, status: 'loading' })
+    getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loading' })
 
-    // 切换服务商快捷键（可自定义，默认 Shift+Tab）
+    // 切换服务商快捷键
     view.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || !switchShortcut) return
       const parts = switchShortcut.split('+')
@@ -439,14 +402,14 @@ function switchProvider(key) {
 
     view.webContents.on('did-finish-load', () => {
       if (currentProviderKey === key) {
-        win.webContents.send('loading', { provider: key, status: 'loaded' })
+        getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loaded' })
       }
       view.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(() => {})
     })
 
     view.webContents.on('did-fail-load', (e, errorCode, errorDesc) => {
       if (currentProviderKey === key) {
-        win.webContents.send('loading', { provider: key, status: 'error', error: errorDesc })
+        getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: errorDesc })
       }
     })
   }
@@ -456,59 +419,45 @@ function switchProvider(key) {
     win.addBrowserView(view)
     updateBrowserViewBounds()
 
-    // 如果已加载，直接通知就绪
     if (!view.webContents.isLoading()) {
-      win.webContents.send('loading', { provider: key, status: 'loaded' })
+      getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loaded' })
     }
   }
 }
 
 // ===== Setup IPC =====
 function setupIPC() {
-  // 切换服务
   ipcMain.on('switch-provider', (event, key) => {
     switchProvider(key)
   })
 
-  // 重载当前页面
   ipcMain.on('reload', () => {
     const view = views.get(currentProviderKey)
     if (view && view.webContents && !view.webContents.isDestroyed()) view.webContents.reload()
   })
 
-  // 切换模式
   ipcMain.handle('toggle-mode', () => {
     setMode(mode === MODE.WINDOW ? MODE.MENUBAR : MODE.WINDOW)
     return mode
   })
 
-  // 获取当前模式
   ipcMain.handle('get-mode', () => mode)
-
-  // 获取当前服务
   ipcMain.handle('get-current-provider', () => currentProviderKey)
-
-  // 获取所有服务
   ipcMain.handle('get-providers', () => PROVIDERS)
 
-  // 侧边栏状态变化（专注模式）
   ipcMain.on('sidebar-state', (event, collapsed) => {
     SIDEBAR_COLLAPSED = collapsed
     updateBrowserViewBounds()
   })
 
-  // 退出专注模式（从边缘条窗口）
   ipcMain.on('exit-focus', () => {
     SIDEBAR_COLLAPSED = false
     destroyEdgeWindow()
     updateBrowserViewBounds()
-
-    // 通知渲染进程
     if (mainWindow) mainWindow.webContents.send('exit-focus-mode')
     if (popupWindow) popupWindow.webContents.send('exit-focus-mode')
   })
 
-  // 设置页面显隐
   ipcMain.on('toggle-settings', (event, show) => {
     const view = views.get(currentProviderKey)
     const win = getActiveWin()
@@ -521,32 +470,20 @@ function setupIPC() {
     }
   })
 
-  // 快捷键设置
   ipcMain.handle('get-shortcut', () => currentShortcut)
   ipcMain.handle('set-shortcut', (event, acc) => {
     currentShortcut = acc
     globalShortcut.unregisterAll()
     if (acc) {
-      globalShortcut.register(acc, () => {
-        const win = mainWindow
-        if (!win) { showMainWindow(); return }
-        if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
-          if (mode === MODE.MENUBAR && popupWindow) popupWindow.hide()
-          else win.hide()
-        } else {
-          showMainWindow()
-        }
-      })
+      globalShortcut.register(acc, toggleWindowVisibility)
     }
   })
 
-  // 切换服务商快捷键
   ipcMain.handle('get-switch-shortcut', () => switchShortcut)
   ipcMain.handle('set-switch-shortcut', (event, acc) => {
     switchShortcut = acc || 'Shift+Tab'
   })
 
-  // 边缘条拖拽移动窗口（专注模式下）
   ipcMain.on('move-window', (event, dx, dy) => {
     const win = getActiveWin()
     if (!win) return
@@ -554,21 +491,18 @@ function setupIPC() {
     win.setPosition(x + dx, y + dy)
   })
 
-  // 主题变化同步到边缘条窗口及所有 BrowserView
   ipcMain.on('theme-changed', (event, theme) => {
-    if (theme === currentTheme && initialProviderLoaded) return // 避免重复更新
+    if (theme === currentTheme && initialProviderLoaded) return
     currentTheme = theme
     nativeTheme.themeSource = theme
     if (edgeWindow) {
       edgeWindow.webContents.send('edge-theme-changed', theme)
     }
-    // 首次：收到渲染进程主题后加载默认服务
     if (!initialProviderLoaded) {
       initialProviderLoaded = true
       switchProvider(currentProviderKey)
       return
     }
-    // 后续主题切换：注入 localStorage；对不遵循 prefers-color-scheme 的服务重载页面
     const view = views.get(currentProviderKey)
     if (view && view.webContents && !view.webContents?.isDestroyed()) {
       view.webContents.executeJavaScript(THEME_SCRIPTS[theme]).then(() => {
@@ -642,7 +576,6 @@ app.on('activate', () => {
   }
 })
 
-// ===== Prevent navigation in main window =====
 app.on('web-contents-created', (event, contents) => {
   if (contents.getType() !== 'window') return
   contents.on('will-navigate', (navEvent, url) => {
