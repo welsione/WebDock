@@ -1,4 +1,6 @@
-const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme, globalShortcut, shell } = require('electron')
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell } = require('electron')
+// Tray, nativeImage — 暂不启用托盘菜单，后续如需启用取消注释
+// const { Tray, nativeImage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const {
@@ -19,7 +21,7 @@ const {
 // ===== State =====
 let mainWindow = null
 let popupWindow = null
-let tray = null
+// let tray = null // 暂不启用托盘菜单
 const views = new Map() // providerKey -> BrowserView 缓存，切换不销毁
 let currentProviderKey = 'deepseek'
 let mode = MODE.WINDOW
@@ -84,10 +86,9 @@ app.whenReady().then(() => {
   if (settings) {
     if (settings.shortcut) currentShortcut = settings.shortcut
     if (settings.switchShortcut) switchShortcut = settings.switchShortcut
-    if (settings.mode) mode = settings.mode
   }
 
-  createTray()
+  // createTray() // 暂不启用托盘菜单
   createMainWindow()
   setupIPC()
   setupMenu()
@@ -151,24 +152,36 @@ function createMainWindow() {
   })
 }
 
-// ===== Create Tray =====
-function createTray() {
-  const iconPath = path.join(__dirname, '../assets/tray-icon.png')
-  const icon = nativeImage.createFromPath(iconPath)
-
-  tray = new Tray(icon.resize({ width: 18, height: 18 }))
-  tray.setToolTip('MineAI Hub')
-
-  tray.setContextMenu(buildTrayMenu())
-
-  tray.on('click', () => {
-    if (mode === MODE.MENUBAR) {
-      togglePopup()
-    } else {
-      showMainWindow()
-    }
-  })
-}
+// ===== Create Tray (暂不启用，后续如需托盘菜单取消注释) =====
+// function createTray() {
+//   const iconPath = path.join(__dirname, '../assets/tray-icon.png')
+//   const icon = nativeImage.createFromPath(iconPath)
+//
+//   tray = new Tray(icon.resize({ width: 18, height: 18 }))
+//   tray.setToolTip('MineAI Hub')
+//
+//   tray.setContextMenu(buildTrayMenu())
+//
+//   tray.on('click', () => {
+//     if (mode === MODE.MENUBAR) {
+//       togglePopup()
+//     } else {
+//       showMainWindow()
+//     }
+//   })
+// }
+//
+// function buildTrayMenu() {
+//   return Menu.buildFromTemplate([
+//     { label: '显示窗口', click: () => showMainWindow() },
+//     { type: 'separator' },
+//     { label: '退出', click: () => app.quit() }
+//   ])
+// }
+//
+// function updateTrayMenu() {
+//   tray.setContextMenu(buildTrayMenu())
+// }
 
 // ===== Create Popup Window (Menubar Mode) =====
 function createPopupWindow() {
@@ -269,20 +282,20 @@ function setMode(newMode) {
   if (mainWindow) mainWindow.webContents.send('mode-changed', mode)
   if (popupWindow) popupWindow.webContents.send('mode-changed', mode)
 
-  updateTrayMenu()
+  // updateTrayMenu() // 暂不启用托盘菜单
 }
 
-function buildTrayMenu() {
-  return Menu.buildFromTemplate([
-    { label: '显示窗口', click: () => showMainWindow() },
-    { type: 'separator' },
-    { label: '退出', click: () => app.quit() }
-  ])
-}
-
-function updateTrayMenu() {
-  tray.setContextMenu(buildTrayMenu())
-}
+// function buildTrayMenu() { // 暂不启用托盘菜单
+//   return Menu.buildFromTemplate([
+//     { label: '显示窗口', click: () => showMainWindow() },
+//     { type: 'separator' },
+//     { label: '退出', click: () => app.quit() }
+//   ])
+// }
+//
+// function updateTrayMenu() {
+//   tray.setContextMenu(buildTrayMenu())
+// }
 
 // ===== Update BrowserView Bounds =====
 function updateBrowserViewBounds() {
