@@ -1873,7 +1873,7 @@
         hint.textContent = '正在连接更新服务器…'
         const result = await window.electronAPI.checkUpdate()
         if (!result.ok) {
-          hint.textContent = result.error || '检查失败'
+          hint.textContent = '检查失败，请稍后重试'
           btn.textContent = '检查更新'
           btn.disabled = false
         }
@@ -1918,10 +1918,10 @@
           btnUpdateAction.disabled = false
           btnUpdateAction.style.display = ''
         } else if (data.status === 'error') {
-          hint.textContent = `检查失败：${data.error}`
+          hint.textContent = '检查失败，请稍后重试'
           btn.textContent = '检查更新'
           btn.disabled = false
-          updateBannerText.textContent = `更新检查失败：${data.error}`
+          updateBannerText.textContent = '更新检查失败，请稍后重试'
           btnUpdateAction.style.display = 'none'
           updateProgress.style.display = 'none'
           setTimeout(() => updateBanner.classList.remove('visible'), 5000)
