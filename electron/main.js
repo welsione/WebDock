@@ -295,7 +295,7 @@ function updateTrayMenu() {
 // ===== Update BrowserView Bounds =====
 function updateBrowserViewBounds() {
   const view = views.get(currentProviderKey)
-  if (!view) return
+  if (!view || view.isDestroyed()) return
 
   const win = getActiveWin()
   if (!win) return
@@ -399,13 +399,13 @@ function switchProvider(key) {
 
   // 隐藏当前 view
   const prevView = views.get(currentProviderKey)
-  if (prevView) {
+  if (prevView && !prevView.isDestroyed()) {
     try { win.removeBrowserView(prevView) } catch (e) {}
   }
 
   // 获取或创建目标 view
   let view = views.get(key)
-  if (!view) {
+  if (!view || view.isDestroyed()) {
     view = new BrowserView({
       webPreferences: {
         nodeIntegration: false,
@@ -452,12 +452,14 @@ function switchProvider(key) {
   }
 
   currentProviderKey = key
-  win.addBrowserView(view)
-  updateBrowserViewBounds()
+  if (!view.isDestroyed()) {
+    win.addBrowserView(view)
+    updateBrowserViewBounds()
 
-  // 如果已加载，直接通知就绪
-  if (!view.webContents.isLoading()) {
-    win.webContents.send('loading', { provider: key, status: 'loaded' })
+    // 如果已加载，直接通知就绪
+    if (!view.webContents.isLoading()) {
+      win.webContents.send('loading', { provider: key, status: 'loaded' })
+    }
   }
 }
 
@@ -471,7 +473,7 @@ function setupIPC() {
   // 重载当前页面
   ipcMain.on('reload', () => {
     const view = views.get(currentProviderKey)
-    if (view) view.webContents.reload()
+    if (view && !view.isDestroyed()) view.webContents.reload()
   })
 
   // 切换模式
@@ -510,7 +512,7 @@ function setupIPC() {
   ipcMain.on('toggle-settings', (event, show) => {
     const view = views.get(currentProviderKey)
     const win = getActiveWin()
-    if (!view || !win) return
+    if (!view || !win || view.isDestroyed()) return
     if (show) {
       try { win.removeBrowserView(view) } catch (e) {}
     } else {
@@ -568,7 +570,7 @@ function setupIPC() {
     }
     // 后续主题切换：注入 localStorage；对不遵循 prefers-color-scheme 的服务重载页面
     const view = views.get(currentProviderKey)
-    if (view) {
+    if (view && view.webContents && !view.isDestroyed()) {
       view.webContents.executeJavaScript(THEME_SCRIPTS[theme]).then(() => {
         if (NEEDS_THEME_RELOAD.has(currentProviderKey)) {
           view.webContents.reload()
