@@ -45,6 +45,30 @@ const THEME_SCRIPTS = {
   [THEME.LIGHT]: buildThemeScript('light')
 }
 
+// ===== Shortcut Matching =====
+const MODIFIERS = new Set(['Meta', 'Control', 'Alt', 'Shift'])
+
+function parseShortcut(str) {
+  if (!str) return null
+  const parts = str.split('+')
+  const mods = new Set(parts.filter(p => MODIFIERS.has(p)))
+  const key = parts.find(p => !MODIFIERS.has(p))
+  if (!key) return null
+  return { mods, key }
+}
+
+function matchesKeyEvent(input, shortcutStr) {
+  if (input.type !== 'keyDown') return false
+  const parsed = parseShortcut(shortcutStr)
+  if (!parsed) return false
+  if (input.meta !== parsed.mods.has('Meta')) return false
+  if (input.control !== parsed.mods.has('Control')) return false
+  if (input.alt !== parsed.mods.has('Alt')) return false
+  if (input.shift !== parsed.mods.has('Shift')) return false
+  const keyCode = input.code.startsWith('Key') ? input.code.slice(3) : input.code
+  return keyCode === parsed.key
+}
+
 module.exports = {
   PROVIDERS,
   NEEDS_THEME_RELOAD,
@@ -57,5 +81,6 @@ module.exports = {
   POPUP_WIDTH,
   POPUP_HEIGHT,
   THEME_BG,
-  THEME_SCRIPTS
+  THEME_SCRIPTS,
+  matchesKeyEvent
 }

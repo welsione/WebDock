@@ -11,7 +11,8 @@ const {
   EDGE_PILL_HEIGHT,
   POPUP_WIDTH,
   POPUP_HEIGHT,
-  THEME_SCRIPTS
+  THEME_SCRIPTS,
+  matchesKeyEvent
 } = require('./config')
 
 // ===== State =====
@@ -384,17 +385,7 @@ function switchProvider(key) {
 
     // 切换服务商快捷键
     view.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || !switchShortcut) return
-      const parts = switchShortcut.split('+')
-      const expectedMods = new Set(parts.filter(p => ['Meta','Control','Alt','Shift'].includes(p)))
-      const expectedKey = parts.find(p => !['Meta','Control','Alt','Shift'].includes(p))
-      if (!expectedKey) return
-      if (input.meta !== expectedMods.has('Meta')) return
-      if (input.control !== expectedMods.has('Control')) return
-      if (input.alt !== expectedMods.has('Alt')) return
-      if (input.shift !== expectedMods.has('Shift')) return
-      const keyCode = input.code.startsWith('Key') ? input.code.slice(3) : input.code
-      if (keyCode !== expectedKey) return
+      if (!matchesKeyEvent(input, switchShortcut)) return
       const idx = PROVIDERS.findIndex(p => p.key === currentProviderKey)
       const next = PROVIDERS[(idx + 1) % PROVIDERS.length]
       if (next.key !== currentProviderKey) switchProvider(next.key)
@@ -408,6 +399,8 @@ function switchProvider(key) {
     })
 
     view.webContents.on('did-fail-load', (e, errorCode, errorDesc) => {
+      // 清除死 view，下次切换时重建
+      views.delete(key)
       if (currentProviderKey === key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: errorDesc })
       }

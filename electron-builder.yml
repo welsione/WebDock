@@ -1,7 +1,7 @@
 appId: com.mineai.hub
 productName: MineAI Hub
 directories:
-  output: dist
+  output: release
   buildResources: assets
 
 asar: true
