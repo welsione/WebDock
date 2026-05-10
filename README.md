@@ -1,6 +1,6 @@
 # MineAI Hub
 
-一站式 AI 服务聚合桌面应用，将 DeepSeek、豆包、Kimi、秘塔等主流 AI 对话平台整合在单一窗口中，无需浏览器即可访问。
+你的 AI 控制中心。一个桌面应用，连接 DeepSeek、豆包、Kimi、秘塔等主流 AI 助手，告别浏览器标签页切换，所有智能对话一站直达。
 
 ![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
