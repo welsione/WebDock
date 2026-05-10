@@ -1,5 +1,6 @@
-const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme, globalShortcut } = require('electron')
+const { app, BrowserWindow, BrowserView, Tray, ipcMain, Menu, nativeImage, screen, nativeTheme, globalShortcut, shell } = require('electron')
 const path = require('path')
+const fs = require('fs')
 const {
   PROVIDERS,
   NEEDS_THEME_RELOAD,
@@ -29,6 +30,28 @@ let initialProviderLoaded = false
 let currentShortcut = 'Cmd+Shift+Space'
 let switchShortcut = 'Shift+Tab'
 
+// ===== Settings Persistence =====
+const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
+
+function loadSettings() {
+  try {
+    if (fs.existsSync(SETTINGS_PATH)) {
+      return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
+    }
+  } catch (e) {}
+  return null
+}
+
+function saveSettings() {
+  try {
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify({
+      shortcut: currentShortcut,
+      switchShortcut,
+      mode
+    }))
+  } catch (e) {}
+}
+
 // ===== Helpers =====
 function getActiveWin() {
   return mode === MODE.MENUBAR ? popupWindow : mainWindow
@@ -56,6 +79,14 @@ function registerGlobalShortcut(acc) {
 
 // ===== App Ready =====
 app.whenReady().then(() => {
+  // 加载持久化设置
+  const settings = loadSettings()
+  if (settings) {
+    if (settings.shortcut) currentShortcut = settings.shortcut
+    if (settings.switchShortcut) switchShortcut = settings.switchShortcut
+    if (settings.mode) mode = settings.mode
+  }
+
   createTray()
   createMainWindow()
   setupIPC()
@@ -248,8 +279,8 @@ function buildTrayMenu() {
     {
       label: '模式',
       submenu: [
-        { label: '独立窗口', type: 'radio', checked: true },
-        { label: '菜单栏', enabled: false }
+        { label: '独立窗口', type: 'radio', checked: mode === MODE.WINDOW, click: () => setMode(MODE.WINDOW) },
+        { label: '菜单栏', type: 'radio', checked: mode === MODE.MENUBAR, click: () => setMode(MODE.MENUBAR) }
       ]
     },
     { type: 'separator' },
@@ -380,6 +411,12 @@ function switchProvider(key) {
     })
     views.set(key, view)
 
+    // 安全：外链在浏览器中打开，不在应用内开新窗口
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url)
+      return { action: 'deny' }
+    })
+
     view.webContents.loadURL(provider.url)
     getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loading' })
 
@@ -403,6 +440,14 @@ function switchProvider(key) {
       views.delete(key)
       if (currentProviderKey === key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: errorDesc })
+      }
+    })
+
+    // 渲染进程崩溃恢复
+    view.webContents.on('render-process-gone', () => {
+      views.delete(key)
+      if (currentProviderKey === key) {
+        getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: 'Renderer crashed' })
       }
     })
   }
@@ -470,11 +515,13 @@ function setupIPC() {
     if (acc) {
       globalShortcut.register(acc, toggleWindowVisibility)
     }
+    saveSettings()
   })
 
   ipcMain.handle('get-switch-shortcut', () => switchShortcut)
   ipcMain.handle('set-switch-shortcut', (event, acc) => {
     switchShortcut = acc || 'Shift+Tab'
+    saveSettings()
   })
 
   ipcMain.on('move-window', (event, dx, dy) => {
