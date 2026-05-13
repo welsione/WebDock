@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard, Notification, session, webContents } from 'electron'
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
 // Tray, nativeImage — 暂不启用托盘菜单，后续如需启用取消注释
 // import { Tray, nativeImage } from 'electron'
@@ -17,6 +17,7 @@ import {
   POPUP_WIDTH,
   POPUP_HEIGHT,
   THEME_SCRIPTS,
+  NOTIFY_BRIDGE,
   CHAT_INPUT_SELECTORS,
   matchesKeyEvent,
   Provider
@@ -93,6 +94,51 @@ function saveSettings(): void {
       builtInColors
     }))
   } catch (e) { log.error('Failed to save settings:', e) }
+}
+
+// ===== Native Notification =====
+function showNativeNotification(title: string, body: string): void {
+  if (!Notification.isSupported()) return
+  const n = new Notification({ title, body })
+  n.on('click', () => showMainWindow())
+  n.show()
+}
+
+// ===== Notification Bridge =====
+// 监听所有 BrowserView 的 console.log 消息，拦截页面内 Notification 调用
+function setupNotificationBridge(): void {
+  webContents.getAllWebContents().forEach(wc => {
+    setupWebContentsNotificationListener(wc)
+  })
+
+  // 新创建的 webContents 也监听
+  app.on('web-contents-created', (_e, contents) => {
+    setupWebContentsNotificationListener(contents)
+  })
+
+  // 自动授予通知权限
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (permission === 'notifications') {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+}
+
+function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
+  if ((wc as Record<string, unknown>)._notifyListened) return
+  ;(wc as Record<string, unknown>)._notifyListened = true
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  wc.on('console-message', (_event: any, _level: any, message: any) => {
+    if (!message || !message.startsWith('__MINEAI_NOTIFY__:')) return
+    try {
+      const data = JSON.parse(message.slice('__MINEAI_NOTIFY__:'.length))
+      if (data.title) {
+        showNativeNotification(data.title, data.body || '')
+      }
+    } catch { /* ignore malformed notify message */ }
+  })
 }
 
 // ===== Helpers =====
@@ -209,8 +255,9 @@ app.whenReady().then(() => {
   }
 
   // createTray() // 暂不启用托盘菜单
-  createMainWindow()
+  setupNotificationBridge()
   setupIPC()
+  createMainWindow()
   setupMenu()
   registerGlobalShortcut(currentShortcut)
 
@@ -234,6 +281,7 @@ function setupAutoUpdater(): void {
   autoUpdater.on('update-available', (info: UpdateInfo) => {
     updateInfo = info
     notifyRenderer('update-status', { status: 'available', version: info.version })
+    showNativeNotification('发现新版本', `MineAI Hub v${info.version} 可用，点击下载更新`)
   })
 
   autoUpdater.on('update-not-available', () => {
@@ -246,6 +294,7 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', () => {
     notifyRenderer('update-status', { status: 'downloaded' })
+    showNativeNotification('更新已就绪', 'MineAI Hub 更新已下载完成，重启即可安装')
   })
 
   autoUpdater.on('error', (err: Error) => {
@@ -622,6 +671,8 @@ function switchProvider(key: string): void {
       }
       // 注入 no-drag，确保 BrowserView 内容可点击
       view!.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(e => log.error('insertCSS failed:', e))
+      // 注入通知拦截脚本（聚合页面内 Notification 到原生通知）
+      view!.webContents.executeJavaScript(NOTIFY_BRIDGE).catch(e => log.error('notify bridge inject failed:', e))
       // 对需要重载的服务商延迟注入主题，等页面 JS 初始化完成读取 localStorage
       const themeDelay = NEEDS_THEME_RELOAD.has(key) ? 300 : 0
       setTimeout(() => {
@@ -641,6 +692,7 @@ function switchProvider(key: string): void {
       views.delete(key)
       if (currentProviderKey === key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: errorDesc })
+        showNativeNotification(`${provider.name} 加载失败`, errorDesc)
       }
     })
 
