@@ -525,7 +525,7 @@ function createEdgeWindow(parentWin: BrowserWindow): void {
 
   // electron-vite: 开发模式下使用 dev server URL，生产模式用文件
   if (import.meta.env.DEV) {
-    edgeWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL!}edge.html?${edgeQuery}`)
+    edgeWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL!}/edge.html?${edgeQuery}`)
   } else {
     edgeWindow.loadFile(path.join(__dirname, '../renderer/edge.html'), {
       query: { theme: currentTheme }
