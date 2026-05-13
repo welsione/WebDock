@@ -164,6 +164,7 @@ document.addEventListener('settings-refresh-providers', () => {
 })
 
 document.addEventListener('provider-settings-changed', () => {
+  renderProviderList()
   saveProviderOrderFromDOM()
 })
 
@@ -174,6 +175,11 @@ setupUpdateStatusListener()
 
 window.electronAPI.onModeChange(mode => {
   document.body.dataset.mode = mode
+})
+
+window.electronAPI.onCurrentProviderChanged(key => {
+  setCurrentProvider(key)
+  renderNav(getState().providerStatus)
 })
 
 window.electronAPI.onSidebarColor(color => {

@@ -1,7 +1,5 @@
 import { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard, Notification, session, webContents } from 'electron'
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
-// Tray, nativeImage — 暂不启用托盘菜单，后续如需启用取消注释
-// import { Tray, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import log from 'electron-log'
@@ -22,6 +20,7 @@ import {
   matchesKeyEvent,
   Provider
 } from './config'
+import { APP_ICON, fetchFavicon, generateLetterIcon, dataUrlToNativeImage, writeIconToTempFile } from './icons'
 
 // ===== Types =====
 interface CustomProvider {
@@ -97,11 +96,41 @@ function saveSettings(): void {
 }
 
 // ===== Native Notification =====
-function showNativeNotification(title: string, body: string): void {
+function showNativeNotification(title: string, body: string, iconDataUrl?: string, providerKey?: string): void {
   if (!Notification.isSupported()) return
-  const n = new Notification({ title, body })
-  n.on('click', () => showMainWindow())
+  const options: Electron.NotificationConstructorOptions = { title, body }
+  if (iconDataUrl) {
+    const img = dataUrlToNativeImage(iconDataUrl)
+    if (img) {
+      options.icon = process.platform === 'darwin' ? writeIconToTempFile(img) ?? img : img
+    }
+  }
+  const n = new Notification(options)
+  n.on('click', () => {
+    if (providerKey && providerKey !== currentProviderKey) {
+      switchProvider(providerKey)
+    }
+    showMainWindow()
+  })
   n.show()
+}
+
+// 当图标无法被正常解析时，生成纯色方块作为最后回退
+// 根据 webContents 查找对应服务商的 key 和图标
+function findProviderByWebContents(wc: Electron.WebContents): { key: string; icon: string } | null {
+  for (const [key, view] of views) {
+    if (view?.webContents?.id === wc.id) {
+      const merged = getMergedProviders()
+      const p = merged.find(x => x.key === key)
+      return p ? { key: p.key, icon: p.icon } : null
+    }
+  }
+  return null
+}
+
+// 根据 webContents 查找对应服务商的图标
+function findProviderIcon(wc: Electron.WebContents): string | undefined {
+  return findProviderByWebContents(wc)?.icon
 }
 
 // ===== Notification Bridge =====
@@ -129,13 +158,14 @@ function setupNotificationBridge(): void {
 function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
   if ((wc as Record<string, unknown>)._notifyListened) return
   ;(wc as Record<string, unknown>)._notifyListened = true
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  wc.on('console-message', (_event: any, _level: any, message: any) => {
+  wc.on('console-message', (_event: Electron.Event, details: Electron.WebContentsConsoleMessageEventParams) => {
+    const message = details.message
     if (!message || !message.startsWith('__MINEAI_NOTIFY__:')) return
     try {
       const data = JSON.parse(message.slice('__MINEAI_NOTIFY__:'.length))
       if (data.title) {
-        showNativeNotification(data.title, data.body || '')
+        const info = findProviderByWebContents(wc)
+        showNativeNotification(data.title, data.body || '', info?.icon, info?.key)
       }
     } catch { /* ignore malformed notify message */ }
   })
@@ -169,55 +199,6 @@ function getMergedProviders(): Provider[] {
   const orderMap = new Map(providerOrder.map((k, i) => [k, i]))
   merged.sort((a, b) => (orderMap.get(a.key) ?? 999) - (orderMap.get(b.key) ?? 999))
   return merged
-}
-
-// 为自定义服务商生成首字母图标
-function generateLetterIcon(name: string): string {
-  const letter = (name || '?').charAt(0).toUpperCase()
-  const colors = ['#5eead4','#f472b6','#a78bfa','#fb923c','#38bdf8','#4ade80','#facc15','#f87171']
-  const color = colors[letter.charCodeAt(0) % colors.length]
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="${color}"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-}
-
-// 尝试单个 URL 获取图标
-function tryFetchIcon(iconUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const { net } = require('electron')
-      const request = net.request(iconUrl)
-      request.on('response', (response: Electron.IncomingMessage) => {
-        if (response.statusCode !== 200) { resolve(null); return }
-        const chunks: Buffer[] = []
-        response.on('data', (chunk: Buffer) => chunks.push(chunk))
-        response.on('end', () => {
-          const buf = Buffer.concat(chunks)
-          if (buf.length < 100) { resolve(null); return }
-          const mime = (response.headers['content-type'] as string[])?.[0] || 'image/x-icon'
-          resolve(`data:${mime};base64,${buf.toString('base64')}`)
-        })
-      })
-      request.on('error', () => resolve(null))
-      setTimeout(() => { try { request.abort() } catch { /* ignore abort on completed request */ } }, 3000)
-      request.end()
-    } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); resolve(null) }
-  })
-}
-
-// 获取网站 favicon，依次尝试多个常见路径
-async function fetchFavicon(siteUrl: string): Promise<string | null> {
-  const origin = new URL(siteUrl).origin
-  const candidates = [
-    `${origin}/favicon.ico`,
-    `${origin}/favicon.png`,
-    `${origin}/apple-touch-icon.png`,
-    `${origin}/apple-touch-icon-precomposed.png`,
-  ]
-  for (const url of candidates) {
-    const icon = await tryFetchIcon(url)
-    if (icon) return icon
-  }
-  return null
 }
 
 // 全局快捷键触发的 toggle 逻辑，两处调用复用
@@ -281,7 +262,7 @@ function setupAutoUpdater(): void {
   autoUpdater.on('update-available', (info: UpdateInfo) => {
     updateInfo = info
     notifyRenderer('update-status', { status: 'available', version: info.version })
-    showNativeNotification('发现新版本', `MineAI Hub v${info.version} 可用，点击下载更新`)
+    showNativeNotification('发现新版本', `MineAI Hub v${info.version} 可用，点击下载更新`, APP_ICON)
   })
 
   autoUpdater.on('update-not-available', () => {
@@ -294,7 +275,7 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('update-downloaded', () => {
     notifyRenderer('update-status', { status: 'downloaded' })
-    showNativeNotification('更新已就绪', 'MineAI Hub 更新已下载完成，重启即可安装')
+    showNativeNotification('更新已就绪', 'MineAI Hub 更新已下载完成，重启即可安装', APP_ICON)
   })
 
   autoUpdater.on('error', (err: Error) => {
@@ -692,7 +673,7 @@ function switchProvider(key: string): void {
       views.delete(key)
       if (currentProviderKey === key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: errorDesc })
-        showNativeNotification(`${provider.name} 加载失败`, errorDesc)
+        showNativeNotification(`${provider.name} 加载失败`, errorDesc, provider.icon, key)
       }
     })
 
@@ -706,6 +687,7 @@ function switchProvider(key: string): void {
   }
 
   currentProviderKey = key
+  getActiveWin()?.webContents?.send('current-provider-changed', key)
   if (view.webContents && !view.webContents.isDestroyed()) {
     view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(e => log.error('insertCSS(cached) failed:', e))
     win.addBrowserView(view)
@@ -945,6 +927,7 @@ function setupIPC(): void {
 
 // ===== Setup Menu =====
 function setupMenu(): void {
+  const isDev = !app.isPackaged
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'MineAI Hub',
@@ -985,7 +968,40 @@ function setupMenu(): void {
         { role: 'minimize' },
         { role: 'close' }
       ]
-    }
+    },
+    ...(isDev ? [{
+      label: '开发',
+      submenu: [
+        {
+          label: '打开 BrowserView DevTools',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => {
+            const view = views.get(currentProviderKey)
+            if (view?.webContents && !view.webContents.isDestroyed()) {
+              view.webContents.openDevTools({ mode: 'detach' })
+            }
+          }
+        },
+        {
+          label: '打开主窗口 DevTools',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.openDevTools({ mode: 'detach' })
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: '发送测试通知 (当前服务商)',
+          click: () => {
+            const p = getMergedProviders().find(x => x.key === currentProviderKey)
+            if (p) {
+              showNativeNotification(`${p.name} — 测试通知`, '来自 MineAI 的测试消息', p.icon, p.key)
+            }
+          }
+        }
+      ]
+    }] : [])
   ]
 
   const menu = Menu.buildFromTemplate(template)

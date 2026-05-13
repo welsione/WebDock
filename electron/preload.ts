@@ -54,6 +54,7 @@ export interface ElectronAPI {
   onLoading: (callback: LoadingCallback) => void
   onSidebarColor: (callback: StringCallback) => void
   onModeChange: (callback: ModeCallback) => void
+  onCurrentProviderChanged: (callback: StringCallback) => void
   notifySidebarState: (collapsed: boolean) => void
   notifyThemeChange: (theme: string) => void
   onExitFocusMode: (callback: VoidCallback) => void
@@ -93,6 +94,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onModeChange: (callback) => {
     ipcRenderer.on('mode-changed', (_event, mode) => callback(mode))
+  },
+  onCurrentProviderChanged: (callback) => {
+    ipcRenderer.on('current-provider-changed', (_event, key) => callback(key))
   },
   notifySidebarState: (collapsed: boolean) => ipcRenderer.send('sidebar-state', collapsed),
   notifyThemeChange: (theme: string) => ipcRenderer.send('theme-changed', theme),

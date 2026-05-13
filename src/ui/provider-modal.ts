@@ -125,69 +125,75 @@ function showFields(show: boolean): void {
 }
 
 async function handleSave(): Promise<void> {
-  const colorDark = getInput('modalColorDark')
-  const colorLight = getInput('modalColorLight')
-  const newColor = { dark: colorDark, light: colorLight }
+  const btn = document.getElementById('modalSave') as HTMLButtonElement
+  try {
+    const colorDark = getInput('modalColorDark')
+    const colorLight = getInput('modalColorLight')
+    const newColor = { dark: colorDark, light: colorLight }
 
-  if (modalMode === 'add') {
-    const name = getInput('modalName').trim()
-    let url = getInput('modalUrl').trim()
-    if (!name || !url) return
-    if (!/^https?:\/\//.test(url)) url = 'https://' + url
-    const btn = document.getElementById('modalSave') as HTMLButtonElement
-    btn.textContent = '添加中…'
-    btn.disabled = true
-    let icon = modalIconData
-    if (!icon) {
-      icon = await window.electronAPI.fetchFavicon(url)
-    }
-    const key = 'custom_' + Date.now()
-    getState().providerSettings.custom.push({ key, name, url, icon: icon || null, color: newColor })
-    document.dispatchEvent(new CustomEvent('provider-settings-changed'))
-    closeModal()
-    btn.textContent = '添加'
-    btn.disabled = false
-    toast(`已添加 ${name}`)
-  } else {
-    const { key, type, index } = modalEditTarget!
-    const { providerSettings } = getState()
-    if (type === 'builtin') {
-      const p = providerSettings.builtIn.find(x => x.key === key)
-      if (p) {
-        p.color = newColor
+    if (modalMode === 'add') {
+      const name = getInput('modalName').trim()
+      let url = getInput('modalUrl').trim()
+      if (!name || !url) return
+      if (!/^https?:\/\//.test(url)) url = 'https://' + url
+      btn.textContent = '添加中…'
+      btn.disabled = true
+      let icon = modalIconData
+      if (!icon) {
+        icon = await window.electronAPI.fetchFavicon(url)
       }
-      await window.electronAPI.saveProviderSettings({
-        enabled: providerSettings.enabled,
-        custom: providerSettings.custom,
-        builtInColors: providerSettings.builtIn.reduce<Record<string, { dark: string; light: string }>>((acc, p) => {
-          if (p.color) acc[p.key] = p.color
-          return acc
-        }, {})
-      })
-    } else {
-      const p = providerSettings.custom[index]
-      if (p) {
-        const name = getInput('modalName').trim()
-        let url = getInput('modalUrl').trim()
-        if (!name || !url) return
-        if (!/^https?:\/\//.test(url)) url = 'https://' + url
-        p.name = name
-        p.url = url
-        p.color = newColor
-        if (modalIconData) p.icon = modalIconData
-      }
+      const key = 'custom_' + Date.now()
+      getState().providerSettings.custom.push({ key, name, url, icon: icon || null, color: newColor })
       document.dispatchEvent(new CustomEvent('provider-settings-changed'))
-    }
-    closeModal()
-    toast('已保存')
-    // 即时更新侧边栏颜色
-    if (key === getState().currentProviderKey) {
-      const sidebar = document.querySelector('.sidebar') as HTMLElement
-      if (sidebar) {
-        const themeKey = document.documentElement.dataset.theme || 'dark'
-        sidebar.style.background = newColor[themeKey as keyof typeof newColor] || newColor.dark
+      closeModal()
+      toast(`已添加 ${name}`)
+    } else {
+      const { key, type, index } = modalEditTarget!
+      const { providerSettings } = getState()
+      if (type === 'builtin') {
+        const p = providerSettings.builtIn.find(x => x.key === key)
+        if (p) {
+          p.color = newColor
+        }
+        await window.electronAPI.saveProviderSettings({
+          enabled: providerSettings.enabled,
+          custom: providerSettings.custom,
+          builtInColors: providerSettings.builtIn.reduce<Record<string, { dark: string; light: string }>>((acc, p) => {
+            if (p.color) acc[p.key] = p.color
+            return acc
+          }, {})
+        })
+      } else {
+        const p = providerSettings.custom[index]
+        if (p) {
+          const name = getInput('modalName').trim()
+          let url = getInput('modalUrl').trim()
+          if (!name || !url) return
+          if (!/^https?:\/\//.test(url)) url = 'https://' + url
+          p.name = name
+          p.url = url
+          p.color = newColor
+          if (modalIconData) p.icon = modalIconData
+        }
+        document.dispatchEvent(new CustomEvent('provider-settings-changed'))
+      }
+      closeModal()
+      toast('已保存')
+      // 即时更新侧边栏颜色
+      if (key === getState().currentProviderKey) {
+        const sidebar = document.querySelector('.sidebar') as HTMLElement
+        if (sidebar) {
+          const themeKey = document.documentElement.dataset.theme || 'dark'
+          sidebar.style.background = newColor[themeKey as keyof typeof newColor] || newColor.dark
+        }
       }
     }
+  } catch (e) {
+    console.error('Failed to save provider:', e)
+    toast('添加失败，请重试')
+  } finally {
+    btn.textContent = modalMode === 'add' ? '添加' : '保存'
+    btn.disabled = false
   }
 }
 

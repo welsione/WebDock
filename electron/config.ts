@@ -35,7 +35,7 @@ const PROVIDERS: Provider[] = [
   { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png'), color: { dark: '#16181e', light: '#fbfbfa' } },
   { key: 'qianwen',  name: '千问',     url: 'https://www.qianwen.com/',      icon: loadIcon('qianwen.png'), color: { dark: '#111112', light: '#f7f7f9' } },
   { key: 'minimax',  name: 'MiniMax',  url: 'https://agent.minimaxi.com/',   icon: loadIcon('minimax.png'), color: { dark: '#171717', light: '#ffffff' } },
-  { key: 'zhipu',    name: '智谱',     url: 'https://chat.z.ai/',            icon: loadIcon('zhipu.svg'), color: { dark: '#161616', light: '#f8f8f8' } }
+  { key: 'zhipu',    name: '智谱',     url: 'https://chat.z.ai/',            icon: loadIcon('zhipu.png'), color: { dark: '#161616', light: '#f8f8f8' } }
 ]
 
 // 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载

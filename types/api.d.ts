@@ -37,6 +37,7 @@ interface ElectronAPI {
   onLoading: (callback: (data: { provider: string; status: string; error?: string }) => void) => void
   onSidebarColor: (callback: (color: string) => void) => void
   onModeChange: (callback: (mode: string) => void) => void
+  onCurrentProviderChanged: (callback: (key: string) => void) => void
   notifySidebarState: (collapsed: boolean) => void
   notifyThemeChange: (theme: string) => void
   onExitFocusMode: (callback: () => void) => void
