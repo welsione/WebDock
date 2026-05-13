@@ -1,20 +1,34 @@
-const { app } = require('electron')
-const path = require('path')
-const fs = require('fs')
+import { app } from 'electron'
+import path from 'path'
+import fs from 'fs'
 
 // ===== Icon Loading =====
 const iconBaseDir = app.isPackaged
   ? path.join(process.resourcesPath, 'assets')
-  : path.join(__dirname, '..', 'assets')
-function loadIcon(name) {
+  : path.join(__dirname, '..', '..', 'assets')
+
+function loadIcon(name: string): string {
   const ext = path.extname(name).toLowerCase()
-  const mimeMap = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
+  const mimeMap: Record<string, string> = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
   const mime = mimeMap[ext] || 'image/png'
   return `data:${mime};base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
 }
 
 // ===== Providers =====
-const PROVIDERS = [
+interface ProviderColor {
+  dark: string
+  light: string
+}
+
+interface Provider {
+  key: string
+  name: string
+  url: string
+  icon: string
+  color: ProviderColor
+}
+
+const PROVIDERS: Provider[] = [
   { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png'), color: { dark: '#151517', light: '#ffffff' } },
   { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png'), color: { dark: '#1f1f1f', light: '#f9f9f9' } },
   { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png'), color: { dark: '#151616', light: '#ffffff' } },
@@ -28,14 +42,14 @@ const PROVIDERS = [
 const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso', 'minimax'])
 
 // 各服务商聊天输入框选择器（用于剪贴板注入，未列出的使用默认选择器）
-const CHAT_INPUT_SELECTORS = {
+const CHAT_INPUT_SELECTORS: Record<string, string> = {
   // 当前所有服务商都使用默认选择器，如需特殊处理在此覆盖
   // deepseek: 'textarea.ChatInput...',
 }
 
 // ===== Constants =====
-const MODE = { WINDOW: 'window', MENUBAR: 'menubar' }
-const THEME = { DARK: 'dark', LIGHT: 'light' }
+const MODE = { WINDOW: 'window', MENUBAR: 'menubar' } as const
+const THEME = { DARK: 'dark', LIGHT: 'light' } as const
 const SIDEBAR_WIDTH = 74
 const EDGE_WIDTH = 0
 const EDGE_PILL_WIDTH = 16
@@ -44,15 +58,15 @@ const POPUP_WIDTH = 500
 const POPUP_HEIGHT = 700
 
 // ===== Theme Scripts =====
-const THEME_BG = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
+const THEME_BG: Record<string, string> = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
 
 const THEME_KEYS = JSON.stringify(['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'])
 
-function buildThemeScript(t) {
+function buildThemeScript(t: string): string {
   return `(function(){var t='${t}';var k=${THEME_KEYS};k.forEach(function(x){try{localStorage.setItem(x,t)}catch(e){}});document.documentElement.setAttribute('data-theme',t);document.documentElement.classList.add(t);document.documentElement.classList.remove(t==='dark'?'light':'dark');try{window.dispatchEvent(new StorageEvent('storage',{key:'theme',newValue:t}))}catch(e){}})()`
 }
 
-const THEME_SCRIPTS = {
+const THEME_SCRIPTS: Record<string, string> = {
   [THEME.DARK]: buildThemeScript('dark'),
   [THEME.LIGHT]: buildThemeScript('light')
 }
@@ -60,7 +74,12 @@ const THEME_SCRIPTS = {
 // ===== Shortcut Matching =====
 const MODIFIERS = new Set(['Meta', 'Control', 'Alt', 'Shift'])
 
-function parseShortcut(str) {
+interface Shortcut {
+  mods: Set<string>
+  key: string
+}
+
+function parseShortcut(str: string): Shortcut | null {
   if (!str) return null
   const parts = str.split('+')
   const mods = new Set(parts.filter(p => MODIFIERS.has(p)))
@@ -69,7 +88,16 @@ function parseShortcut(str) {
   return { mods, key }
 }
 
-function matchesKeyEvent(input, shortcutStr) {
+interface KeyEvent {
+  type: string
+  meta: boolean
+  control: boolean
+  alt: boolean
+  shift: boolean
+  code: string
+}
+
+function matchesKeyEvent(input: KeyEvent, shortcutStr: string): boolean {
   if (input.type !== 'keyDown') return false
   const parsed = parseShortcut(shortcutStr)
   if (!parsed) return false
@@ -81,7 +109,7 @@ function matchesKeyEvent(input, shortcutStr) {
   return keyCode === parsed.key
 }
 
-module.exports = {
+export {
   PROVIDERS,
   NEEDS_THEME_RELOAD,
   MODE,
@@ -95,5 +123,8 @@ module.exports = {
   THEME_BG,
   THEME_SCRIPTS,
   CHAT_INPUT_SELECTORS,
+  parseShortcut,
   matchesKeyEvent
 }
+
+export type { Provider, ProviderColor, KeyEvent }

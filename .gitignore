@@ -2,6 +2,8 @@ node_modules/
 .DS_Store
 *.log
 release/
+dist/
+out/
 .idea/
 .claude/
 CLAUDE.md

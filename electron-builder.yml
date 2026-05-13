@@ -19,8 +19,7 @@ extraResources:
       - "*.svg"
 
 files:
-  - "electron/**/*"
-  - "src/**/*"
+  - "out/**/*"
   - "package.json"
 
 mac:

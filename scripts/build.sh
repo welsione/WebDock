@@ -8,7 +8,7 @@ echo "=== 清理旧产物 ==="
 rm -rf release
 
 echo "=== 开始打包 (macOS) ==="
-ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm run build:mac
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron-builder --mac
 
 echo "=== 打包完成 ==="
 ls -lh release/*.dmg

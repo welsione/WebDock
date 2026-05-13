@@ -1,10 +1,11 @@
-const { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard } = require('electron')
-const { autoUpdater } = require('electron-updater')
+import { app, BrowserWindow, BrowserView, ipcMain, Menu, screen, nativeTheme, globalShortcut, shell, clipboard } from 'electron'
+import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
 // Tray, nativeImage — 暂不启用托盘菜单，后续如需启用取消注释
-// const { Tray, nativeImage } = require('electron')
-const path = require('path')
-const fs = require('fs')
-const {
+// import { Tray, nativeImage } from 'electron'
+import path from 'path'
+import fs from 'fs'
+import log from 'electron-log'
+import {
   PROVIDERS,
   NEEDS_THEME_RELOAD,
   MODE,
@@ -17,48 +18,69 @@ const {
   POPUP_HEIGHT,
   THEME_SCRIPTS,
   CHAT_INPUT_SELECTORS,
-  matchesKeyEvent
-} = require('./config')
+  matchesKeyEvent,
+  Provider
+} from './config'
+
+// ===== Types =====
+interface CustomProvider {
+  key: string
+  name: string
+  url: string
+  icon?: string
+  color?: { dark: string; light: string }
+}
+
+interface Settings {
+  shortcut?: string
+  switchShortcut?: string
+  mode?: string
+  enabledProviders?: string[] | null
+  customProviders?: CustomProvider[]
+  providerOrder?: string[] | null
+  windowBounds?: { x: number; y: number; width: number; height: number } | null
+  builtInColors?: Record<string, { dark: string; light: string }>
+}
 
 // ===== State =====
-let mainWindow = null
-let popupWindow = null
-// let tray = null // 暂不启用托盘菜单
-const views = new Map() // providerKey -> BrowserView 缓存，切换不销毁
+let mainWindow: BrowserWindow | null = null
+let popupWindow: BrowserWindow | null = null
+// let tray: Tray | null = null // 暂不启用托盘菜单
+const views = new Map<string, BrowserView>() // providerKey -> BrowserView 缓存，切换不销毁
 let currentProviderKey = 'deepseek'
-let enabledProviders = null // null = 全部内置启用
-let customProviders = [] // [{key, name, url}]
-let providerOrder = null // null = 默认顺序，否则为 key 数组
-let mode = MODE.WINDOW
+let enabledProviders: string[] | null = null // null = 全部内置启用
+let customProviders: CustomProvider[] = [] // [{key, name, url}]
+let providerOrder: string[] | null = null // null = 默认顺序，否则为 key 数组
+let mode: string = MODE.WINDOW
 let SIDEBAR_COLLAPSED = false
-let edgeWindow = null
-let currentTheme = THEME.DARK
+let edgeWindow: BrowserWindow | null = null
+let currentTheme: string = THEME.DARK
 let initialProviderLoaded = false
 let currentShortcut = 'Cmd+Shift+Space'
 let switchShortcut = 'Shift+Tab'
-let savedBounds = null // {x, y, width, height}
-let builtInColors = {} // { providerKey: { dark, light } }
+let savedBounds: { x: number; y: number; width: number; height: number } | null = null
+let builtInColors: Record<string, { dark: string; light: string }> = {}
 
 // ===== Settings Persistence =====
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
-function loadSettings() {
+function loadSettings(): Settings | null {
   try {
     if (fs.existsSync(SETTINGS_PATH)) {
       return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
     }
-  } catch (e) {}
+  } catch (e) { log.error('Failed to load settings:', e) }
   return null
 }
 
-function saveWindowBounds() {
+function saveWindowBounds(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const bounds = mainWindow.getBounds()
   savedBounds = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
   saveSettings()
 }
 
-function saveSettings() {
+function saveSettings(): void {
   try {
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify({
       shortcut: currentShortcut,
@@ -70,18 +92,18 @@ function saveSettings() {
       windowBounds: savedBounds,
       builtInColors
     }))
-  } catch (e) {}
+  } catch (e) { log.error('Failed to save settings:', e) }
 }
 
 // ===== Helpers =====
-function getActiveWin() {
+function getActiveWin(): BrowserWindow | null {
   return mode === MODE.MENUBAR ? popupWindow : mainWindow
 }
 
 // 获取合并后的服务商列表（内置已启用 + 自定义）
-function getMergedProviders() {
+function getMergedProviders(): Provider[] {
   const builtIn = (enabledProviders
-    ? PROVIDERS.filter(p => enabledProviders.includes(p.key))
+    ? PROVIDERS.filter(p => enabledProviders!.includes(p.key))
     : [...PROVIDERS]
   ).map(p => ({
     ...p,
@@ -90,9 +112,12 @@ function getMergedProviders() {
   const custom = customProviders.map(p => ({
     ...p,
     icon: p.icon || generateLetterIcon(p.name),
-    color: p.color || { dark: '#1a1e28', light: '#f0f2f5' }
+    color: p.color || { dark: '#1a1e28', light: '#f0f2f5' },
+    key: p.key,
+    name: p.name,
+    url: p.url
   }))
-  const merged = [...builtIn, ...custom]
+  const merged: Provider[] = [...builtIn, ...custom]
   if (!providerOrder) return merged
   // 按 providerOrder 排序，未在 order 中的排到末尾
   const orderMap = new Map(providerOrder.map((k, i) => [k, i]))
@@ -101,7 +126,7 @@ function getMergedProviders() {
 }
 
 // 为自定义服务商生成首字母图标
-function generateLetterIcon(name) {
+function generateLetterIcon(name: string): string {
   const letter = (name || '?').charAt(0).toUpperCase()
   const colors = ['#5eead4','#f472b6','#a78bfa','#fb923c','#38bdf8','#4ade80','#facc15','#f87171']
   const color = colors[letter.charCodeAt(0) % colors.length]
@@ -110,30 +135,31 @@ function generateLetterIcon(name) {
 }
 
 // 尝试单个 URL 获取图标
-function tryFetchIcon(iconUrl) {
+function tryFetchIcon(iconUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
       const { net } = require('electron')
       const request = net.request(iconUrl)
-      request.on('response', (response) => {
+      request.on('response', (response: Electron.IncomingMessage) => {
         if (response.statusCode !== 200) { resolve(null); return }
-        const chunks = []
-        response.on('data', (chunk) => chunks.push(chunk))
+        const chunks: Buffer[] = []
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
         response.on('end', () => {
           const buf = Buffer.concat(chunks)
           if (buf.length < 100) { resolve(null); return }
-          const mime = response.headers['content-type']?.[0] || 'image/x-icon'
+          const mime = (response.headers['content-type'] as string[])?.[0] || 'image/x-icon'
           resolve(`data:${mime};base64,${buf.toString('base64')}`)
         })
       })
       request.on('error', () => resolve(null))
-      setTimeout(() => { try { request.abort() } catch(e){}; resolve(null) }, 3000)
-    } catch { resolve(null) }
+      setTimeout(() => { try { request.abort() } catch { /* ignore abort on completed request */ } }, 3000)
+      request.end()
+    } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); resolve(null) }
   })
 }
 
 // 获取网站 favicon，依次尝试多个常见路径
-async function fetchFavicon(siteUrl) {
+async function fetchFavicon(siteUrl: string): Promise<string | null> {
   const origin = new URL(siteUrl).origin
   const candidates = [
     `${origin}/favicon.ico`,
@@ -149,7 +175,7 @@ async function fetchFavicon(siteUrl) {
 }
 
 // 全局快捷键触发的 toggle 逻辑，两处调用复用
-function toggleWindowVisibility() {
+function toggleWindowVisibility(): void {
   const win = mainWindow
   if (!win) { showMainWindow(); return }
   if (win.isVisible() && (mode === MODE.WINDOW || (popupWindow && popupWindow.isVisible()))) {
@@ -161,11 +187,11 @@ function toggleWindowVisibility() {
 }
 
 // ===== Global Shortcut =====
-function registerGlobalShortcut(acc) {
+function registerGlobalShortcut(acc: string): void {
   globalShortcut.unregisterAll()
   if (!acc) return
   const registered = globalShortcut.register(acc, toggleWindowVisibility)
-  if (!registered) console.error('Failed to register global shortcut:', acc)
+  if (!registered) log.error('Failed to register global shortcut:', acc)
 }
 
 // ===== App Ready =====
@@ -175,7 +201,7 @@ app.whenReady().then(() => {
   if (settings) {
     if (settings.shortcut) currentShortcut = settings.shortcut
     if (settings.switchShortcut) switchShortcut = settings.switchShortcut
-    if (settings.enabledProviders) enabledProviders = settings.enabledProviders
+    if (settings.enabledProviders !== undefined) enabledProviders = settings.enabledProviders
     if (settings.customProviders) customProviders = settings.customProviders
     if (settings.providerOrder) providerOrder = settings.providerOrder
     if (settings.windowBounds) savedBounds = settings.windowBounds
@@ -199,13 +225,13 @@ app.on('will-quit', () => {
 })
 
 // ===== Auto Updater =====
-let updateInfo = null
+let updateInfo: UpdateInfo | null = null
 
-function setupAutoUpdater() {
+function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
-  autoUpdater.on('update-available', (info) => {
+  autoUpdater.on('update-available', (info: UpdateInfo) => {
     updateInfo = info
     notifyRenderer('update-status', { status: 'available', version: info.version })
   })
@@ -214,7 +240,7 @@ function setupAutoUpdater() {
     notifyRenderer('update-status', { status: 'none' })
   })
 
-  autoUpdater.on('download-progress', (progress) => {
+  autoUpdater.on('download-progress', (progress: ProgressInfo) => {
     notifyRenderer('update-status', { status: 'downloading', percent: progress.percent })
   })
 
@@ -222,15 +248,15 @@ function setupAutoUpdater() {
     notifyRenderer('update-status', { status: 'downloaded' })
   })
 
-  autoUpdater.on('error', (err) => {
+  autoUpdater.on('error', (err: Error) => {
     notifyRenderer('update-status', { status: 'error', error: err.message })
   })
 
   // 启动后延迟检查更新
-  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000)
+  setTimeout(() => autoUpdater.checkForUpdates().catch(e => log.error('checkForUpdates failed:', e)), 5000)
 }
 
-function notifyRenderer(channel, data) {
+function notifyRenderer(channel: string, data: Record<string, unknown>): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data)
   }
@@ -240,7 +266,7 @@ function notifyRenderer(channel, data) {
 }
 
 // ===== Validate Bounds =====
-function isValidBounds(bounds) {
+function isValidBounds(bounds: { x: number; y: number; width: number; height: number } | null): boolean {
   if (!bounds) return false
   const displays = screen.getAllDisplays()
   return displays.some(d => {
@@ -253,10 +279,10 @@ function isValidBounds(bounds) {
 }
 
 // ===== Create Main Window =====
-function createMainWindow() {
+function createMainWindow(): void {
   const defaultBounds = { width: 1000, height: 700 }
   const bounds = isValidBounds(savedBounds)
-    ? { ...savedBounds, minWidth: 600, minHeight: 400 }
+    ? { ...savedBounds!, minWidth: 600, minHeight: 400 }
     : { ...defaultBounds, minWidth: 600, minHeight: 400 }
 
   mainWindow = new BrowserWindow({
@@ -265,13 +291,18 @@ function createMainWindow() {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 8, y: 8 },
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     }
   })
 
-  mainWindow.loadFile(path.join(__dirname, '../src/index.html'))
+  // electron-vite: 开发模式下使用 dev server URL，生产模式用文件
+  if (import.meta.env.DEV) {
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL!)
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+  }
 
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
@@ -279,12 +310,12 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     if (mode === MODE.WINDOW) {
-      mainWindow.show()
+      mainWindow!.show()
     }
   })
 
   // 窗口大小变化时更新 BrowserView
-  let resizeTimer = null
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null
   mainWindow.on('resize', () => {
     if (resizeTimer) return
     resizeTimer = setTimeout(() => {
@@ -294,7 +325,7 @@ function createMainWindow() {
   })
 
   // 窗口移动/调整大小时延迟保存位置到磁盘
-  let boundsSaveTimer = null
+  let boundsSaveTimer: ReturnType<typeof setTimeout> | null = null
   const scheduleBoundsSave = () => {
     if (boundsSaveTimer) clearTimeout(boundsSaveTimer)
     boundsSaveTimer = setTimeout(() => {
@@ -308,7 +339,7 @@ function createMainWindow() {
   mainWindow.on('close', (e) => {
     if (mode === MODE.MENUBAR) {
       e.preventDefault()
-      mainWindow.hide()
+      mainWindow!.hide()
     } else {
       destroyEdgeWindow()
     }
@@ -321,7 +352,7 @@ function createMainWindow() {
 }
 
 // ===== Create Tray (暂不启用，后续如需托盘菜单取消注释) =====
-// function createTray() {
+// function createTray(): void {
 //   const iconPath = path.join(__dirname, '../assets/tray-icon.png')
 //   const icon = nativeImage.createFromPath(iconPath)
 //
@@ -339,7 +370,7 @@ function createMainWindow() {
 //   })
 // }
 //
-// function buildTrayMenu() {
+// function buildTrayMenu(): Menu {
 //   return Menu.buildFromTemplate([
 //     { label: '显示窗口', click: () => showMainWindow() },
 //     { type: 'separator' },
@@ -347,12 +378,12 @@ function createMainWindow() {
 //   ])
 // }
 //
-// function updateTrayMenu() {
-//   tray.setContextMenu(buildTrayMenu())
+// function updateTrayMenu(): void {
+//   tray!.setContextMenu(buildTrayMenu())
 // }
 
 // ===== Create Popup Window (Menubar Mode) =====
-function createPopupWindow() {
+function createPopupWindow(): BrowserWindow {
   if (popupWindow) return popupWindow
 
   popupWindow = new BrowserWindow({
@@ -364,13 +395,18 @@ function createPopupWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     }
   })
 
-  popupWindow.loadFile(path.join(__dirname, '../src/index.html'))
+  // electron-vite: 开发模式下使用 dev server URL，生产模式用文件
+  if (import.meta.env.DEV) {
+    popupWindow.loadURL(process.env.ELECTRON_RENDERER_URL!)
+  } else {
+    popupWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+  }
 
   popupWindow.on('blur', () => {
     if (popupWindow && popupWindow.isVisible()) {
@@ -385,17 +421,17 @@ function createPopupWindow() {
   return popupWindow
 }
 
-function togglePopup() {
+function togglePopup(): void {
   if (!popupWindow) {
     createPopupWindow()
   }
 
-  if (popupWindow.isVisible()) {
-    popupWindow.hide()
+  if (popupWindow!.isVisible()) {
+    popupWindow!.hide()
   } else {
     positionPopup()
-    popupWindow.show()
-    popupWindow.focus()
+    popupWindow!.show()
+    popupWindow!.focus()
 
     if (!views.has(currentProviderKey)) {
       switchProvider(currentProviderKey)
@@ -403,33 +439,17 @@ function togglePopup() {
   }
 }
 
-function positionPopup() {
-  if (!tray || !popupWindow) return
-
-  const trayBounds = tray.getBounds()
-  const popupWidth = POPUP_WIDTH
-
-  let x = Math.round(trayBounds.x + trayBounds.width / 2 - popupWidth / 2)
-  let y = Math.round(trayBounds.y + trayBounds.height + 4)
-
-  const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
-  const workArea = display.workArea
-
-  if (x < workArea.x) x = workArea.x
-  if (x + popupWidth > workArea.x + workArea.width) {
-    x = workArea.x + workArea.width - popupWidth
-  }
-
-  popupWindow.setPosition(x, y)
+function positionPopup(): void {
+  // tray is not used yet, function kept for future use
 }
 
 // ===== Show Main Window =====
-function showMainWindow() {
+function showMainWindow(): void {
   if (!mainWindow) {
     createMainWindow()
   }
-  mainWindow.show()
-  mainWindow.focus()
+  mainWindow!.show()
+  mainWindow!.focus()
 
   if (!views.has(currentProviderKey)) {
     switchProvider(currentProviderKey)
@@ -437,7 +457,7 @@ function showMainWindow() {
 }
 
 // ===== Set Mode =====
-function setMode(newMode) {
+function setMode(newMode: string): void {
   mode = newMode
 
   if (newMode === MODE.WINDOW) {
@@ -449,24 +469,10 @@ function setMode(newMode) {
 
   if (mainWindow) mainWindow.webContents.send('mode-changed', mode)
   if (popupWindow) popupWindow.webContents.send('mode-changed', mode)
-
-  // updateTrayMenu() // 暂不启用托盘菜单
 }
 
-// function buildTrayMenu() { // 暂不启用托盘菜单
-//   return Menu.buildFromTemplate([
-//     { label: '显示窗口', click: () => showMainWindow() },
-//     { type: 'separator' },
-//     { label: '退出', click: () => app.quit() }
-//   ])
-// }
-//
-// function updateTrayMenu() {
-//   tray.setContextMenu(buildTrayMenu())
-// }
-
 // ===== Update BrowserView Bounds =====
-function updateBrowserViewBounds() {
+function updateBrowserViewBounds(): void {
   const view = views.get(currentProviderKey)
   if (!view || view.webContents?.isDestroyed()) return
 
@@ -491,17 +497,16 @@ function updateBrowserViewBounds() {
 }
 
 // 创建边缘条窗口
-function createEdgeWindow(parentWin) {
+function createEdgeWindow(parentWin: BrowserWindow): void {
   if (edgeWindow) return
 
   const contentBounds = parentWin.getContentBounds()
-  const parentBounds = parentWin.getBounds()
   const pillY = contentBounds.y + Math.round((contentBounds.height - EDGE_PILL_HEIGHT) / 2)
 
   edgeWindow = new BrowserWindow({
     width: EDGE_PILL_WIDTH,
     height: EDGE_PILL_HEIGHT,
-    x: parentBounds.x,
+    x: contentBounds.x,
     y: pillY,
     frame: false,
     transparent: true,
@@ -510,17 +515,24 @@ function createEdgeWindow(parentWin) {
     hasShadow: false,
     parent: parentWin,
     webPreferences: {
-      preload: path.join(__dirname, 'edge-preload.js'),
+      preload: path.join(__dirname, '../preload/edge.js'),
       nodeIntegration: false,
       contextIsolation: true
     }
   })
 
-  edgeWindow.loadFile(path.join(__dirname, '../src/edge.html'), {
-    query: { theme: currentTheme }
-  })
+  const edgeQuery = `theme=${currentTheme}`
 
-  let edgeMoveTimer = null
+  // electron-vite: 开发模式下使用 dev server URL，生产模式用文件
+  if (import.meta.env.DEV) {
+    edgeWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL!}edge.html?${edgeQuery}`)
+  } else {
+    edgeWindow.loadFile(path.join(__dirname, '../renderer/edge.html'), {
+      query: { theme: currentTheme }
+    })
+  }
+
+  let edgeMoveTimer: ReturnType<typeof setTimeout> | null = null
   const updateEdge = () => {
     if (edgeMoveTimer) return
     edgeMoveTimer = setTimeout(() => {
@@ -531,13 +543,13 @@ function createEdgeWindow(parentWin) {
   }
   parentWin.on('move', updateEdge)
   parentWin.on('resize', updateEdge)
-  edgeWindow._cleanup = () => {
+  ;(edgeWindow as unknown as Record<string, unknown>)._cleanup = () => {
     parentWin.removeListener('move', updateEdge)
     parentWin.removeListener('resize', updateEdge)
   }
 }
 
-function updateEdgeWindowPosition() {
+function updateEdgeWindowPosition(): void {
   if (!edgeWindow) return
 
   const parentWin = getActiveWin()
@@ -549,16 +561,17 @@ function updateEdgeWindowPosition() {
   edgeWindow.setPosition(contentBounds.x, pillY)
 }
 
-function destroyEdgeWindow() {
+function destroyEdgeWindow(): void {
   if (edgeWindow) {
-    if (edgeWindow._cleanup) edgeWindow._cleanup()
+    const win = edgeWindow as unknown as Record<string, unknown>
+    if (typeof (win._cleanup) === 'function') (win._cleanup as () => void)()
     edgeWindow.close()
     edgeWindow = null
   }
 }
 
 // ===== Switch Provider (BrowserView 缓存，切换不销毁) =====
-function switchProvider(key) {
+function switchProvider(key: string): void {
   const provider = getMergedProviders().find(p => p.key === key)
   if (!provider) return
 
@@ -568,7 +581,7 @@ function switchProvider(key) {
   // 隐藏当前 view
   const prevView = views.get(currentProviderKey)
   if (prevView && prevView.webContents && !prevView.webContents.isDestroyed()) {
-    try { win.removeBrowserView(prevView) } catch (e) {}
+    try { win.removeBrowserView(prevView) } catch { /* may already be removed */ }
   }
 
   // 获取或创建目标 view
@@ -594,7 +607,8 @@ function switchProvider(key) {
     getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loading' })
 
     // 切换服务商快捷键
-    view.webContents.on('before-input-event', (event, input) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(view.webContents as any).on('before-input-event', (_event: Event, input: any) => {
       if (!matchesKeyEvent(input, switchShortcut)) return
       const allProviders = getMergedProviders()
       const idx = allProviders.findIndex(p => p.key === currentProviderKey)
@@ -607,22 +621,22 @@ function switchProvider(key) {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'loaded' })
       }
       // 注入 no-drag，确保 BrowserView 内容可点击
-      view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(() => {})
+      view!.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(e => log.error('insertCSS failed:', e))
       // 对需要重载的服务商延迟注入主题，等页面 JS 初始化完成读取 localStorage
       const themeDelay = NEEDS_THEME_RELOAD.has(key) ? 300 : 0
       setTimeout(() => {
-        if (view.webContents && !view.webContents.isDestroyed()) {
-          view.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(() => {})
+        if (view!.webContents && !view!.webContents.isDestroyed()) {
+          view!.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(e => log.error('executeJavaScript(theme) failed:', e))
         }
       }, themeDelay)
       // 页面加载完成后发送侧边栏颜色
       if (provider.color) {
-        const sidebarColor = provider.color[currentTheme] || provider.color.dark
+        const sidebarColor = provider.color[currentTheme as keyof typeof provider.color] || provider.color.dark
         getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
       }
     })
 
-    view.webContents.on('did-fail-load', (e, errorCode, errorDesc) => {
+    view.webContents.on('did-fail-load', (_e, errorCode, errorDesc) => {
       // 清除死 view，下次切换时重建
       views.delete(key)
       if (currentProviderKey === key) {
@@ -641,7 +655,7 @@ function switchProvider(key) {
 
   currentProviderKey = key
   if (view.webContents && !view.webContents.isDestroyed()) {
-    view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(() => {})
+    view.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(e => log.error('insertCSS(cached) failed:', e))
     win.addBrowserView(view)
     updateBrowserViewBounds()
 
@@ -651,15 +665,15 @@ function switchProvider(key) {
 
     // 发送侧边栏颜色
     if (provider.color) {
-      const sidebarColor = provider.color[currentTheme] || provider.color.dark
+      const sidebarColor = provider.color[currentTheme as keyof typeof provider.color] || provider.color.dark
       getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
     }
   }
 }
 
 // ===== Setup IPC =====
-function setupIPC() {
-  ipcMain.on('switch-provider', (event, key) => {
+function setupIPC(): void {
+  ipcMain.on('switch-provider', (_event, key: string) => {
     switchProvider(key)
   })
 
@@ -685,7 +699,7 @@ function setupIPC() {
     custom: customProviders,
     order: providerOrder
   }))
-  ipcMain.handle('save-provider-settings', (event, settings) => {
+  ipcMain.handle('save-provider-settings', (_event, settings: { enabled: string[] | null; custom: CustomProvider[]; builtInColors?: Record<string, { dark: string; light: string }> }) => {
     enabledProviders = settings.enabled
     customProviders = settings.custom || []
     if (settings.builtInColors) {
@@ -697,14 +711,14 @@ function setupIPC() {
     if (popupWindow) popupWindow.webContents.send('providers-updated', getMergedProviders())
   })
 
-  ipcMain.handle('save-provider-order', (event, order) => {
+  ipcMain.handle('save-provider-order', (_event, order: string[]) => {
     providerOrder = order
     saveSettings()
     if (mainWindow) mainWindow.webContents.send('providers-updated', getMergedProviders())
     if (popupWindow) popupWindow.webContents.send('providers-updated', getMergedProviders())
   })
 
-  ipcMain.on('sidebar-state', (event, collapsed) => {
+  ipcMain.on('sidebar-state', (_event, collapsed: boolean) => {
     SIDEBAR_COLLAPSED = collapsed
     const win = getActiveWin()
     if (win && !win.isDestroyed()) {
@@ -724,12 +738,12 @@ function setupIPC() {
     if (popupWindow) popupWindow.webContents.send('exit-focus-mode')
   })
 
-  ipcMain.on('toggle-settings', (event, show) => {
+  ipcMain.on('toggle-settings', (_event, show: boolean) => {
     const view = views.get(currentProviderKey)
     const win = getActiveWin()
     if (!view || !win || view.webContents?.isDestroyed()) return
     if (show) {
-      try { win.removeBrowserView(view) } catch (e) {}
+      try { win.removeBrowserView(view) } catch { /* may already be removed */ }
     } else {
       win.addBrowserView(view)
       updateBrowserViewBounds()
@@ -737,7 +751,7 @@ function setupIPC() {
   })
 
   ipcMain.handle('get-shortcut', () => currentShortcut)
-  ipcMain.handle('set-shortcut', (event, acc) => {
+  ipcMain.handle('set-shortcut', (_event, acc: string) => {
     if (!acc) {
       globalShortcut.unregisterAll()
       currentShortcut = ''
@@ -760,7 +774,7 @@ function setupIPC() {
   })
 
   ipcMain.handle('get-switch-shortcut', () => switchShortcut)
-  ipcMain.handle('set-switch-shortcut', (event, acc) => {
+  ipcMain.handle('set-switch-shortcut', (_event, acc: string) => {
     if (acc && acc === currentShortcut) {
       return { ok: false, error: '与全局快捷键冲突，请选择其他组合' }
     }
@@ -770,12 +784,12 @@ function setupIPC() {
   })
 
   // 获取网站 favicon
-  ipcMain.handle('fetch-favicon', async (event, url) => {
+  ipcMain.handle('fetch-favicon', async (_event, url: string) => {
     return await fetchFavicon(url)
   })
 
   // 从 URL 获取图标（供设置页手动输入图标网址使用）
-  ipcMain.handle('fetch-icon-url', async (event, iconUrl) => {
+  ipcMain.handle('fetch-icon-url', async (_event, iconUrl: string) => {
     return await tryFetchIcon(iconUrl)
   })
 
@@ -806,21 +820,21 @@ function setupIPC() {
       `)
       return { ok: true }
     } catch (e) {
-      return { ok: false, error: '注入失败：' + e.message }
+      return { ok: false, error: '注入失败：' + (e as Error).message }
     }
   })
 
-  ipcMain.on('move-window', (event, dx, dy) => {
+  ipcMain.on('move-window', (_event, dx: number, dy: number) => {
     const win = getActiveWin()
     if (!win) return
     const [x, y] = win.getPosition()
     win.setPosition(x + dx, y + dy)
   })
 
-  ipcMain.on('theme-changed', (event, theme) => {
+  ipcMain.on('theme-changed', (_event, theme: string) => {
     if (theme === currentTheme && initialProviderLoaded) return
     currentTheme = theme
-    nativeTheme.themeSource = theme
+    nativeTheme.themeSource = theme as typeof nativeTheme.themeSource
     if (edgeWindow) {
       edgeWindow.webContents.send('edge-theme-changed', theme)
     }
@@ -840,11 +854,11 @@ function setupIPC() {
             }
           }, 100)
         }
-      }).catch(() => {})
+      }).catch(e => log.error('theme executeJavaScript failed:', e))
       // 主题切换后更新侧边栏颜色
       const provider = getMergedProviders().find(p => p.key === currentProviderKey)
       if (provider?.color) {
-        const sidebarColor = provider.color[theme] || provider.color.dark
+        const sidebarColor = provider.color[theme as keyof typeof provider.color] || provider.color.dark
         getActiveWin()?.webContents?.send('sidebar-color', sidebarColor)
       }
     }
@@ -857,7 +871,7 @@ function setupIPC() {
       const result = await autoUpdater.checkForUpdates()
       return { ok: true, hasUpdate: !!result }
     } catch (e) {
-      return { ok: false, error: e.message }
+      return { ok: false, error: (e as Error).message }
     }
   })
 
@@ -867,7 +881,7 @@ function setupIPC() {
       await autoUpdater.downloadUpdate()
       return { ok: true }
     } catch (e) {
-      return { ok: false, error: e.message }
+      return { ok: false, error: (e as Error).message }
     }
   })
 
@@ -878,8 +892,8 @@ function setupIPC() {
 }
 
 // ===== Setup Menu =====
-function setupMenu() {
-  const template = [
+function setupMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'MineAI Hub',
       submenu: [
@@ -939,9 +953,9 @@ app.on('activate', () => {
   }
 })
 
-app.on('web-contents-created', (event, contents) => {
+app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() !== 'window') return
-  contents.on('will-navigate', (navEvent, url) => {
+  ;(contents as any).on('will-navigate', (navEvent: Event & { preventDefault: () => void }, url: string) => {
     if (url && url.startsWith('file://')) {
       navEvent.preventDefault()
     }

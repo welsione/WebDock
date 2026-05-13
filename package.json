@@ -2,18 +2,34 @@
   "name": "mineai-hub",
   "version": "1.0.3",
   "description": "AI 服务聚合桌面应用",
-  "main": "electron/main.js",
+  "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron .",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "release:mac": "bash scripts/build.sh"
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && electron-builder",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "release:mac": "electron-vite build && bash scripts/build.sh",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint electron/ src/ types/ --ext .ts",
+    "lint:fix": "eslint electron/ src/ types/ --ext .ts --fix",
+    "format": "prettier --write electron/ src/ types/"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^25.7.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
     "electron": "^35.7.5",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "electron-log": "^5.4.3",
+    "electron-vite": "^5.0.0",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.3",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
     "electron-updater": "^6.8.3"
