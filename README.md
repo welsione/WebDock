@@ -2,7 +2,7 @@
 
 还在多个浏览器标签页之间反复横跳？MineAI Hub 把 DeepSeek、豆包、Kimi、秘塔、千问、MiniMax、智谱装进一个桌面应用 — 敲代码问 DeepSeek，写文案问豆包，做研究问秘塔，一个快捷键，所有 AI 助手随叫随到。
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue)
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Stars](https://img.shields.io/github/stars/welsione/MineAI-Hub?style=flat)
@@ -18,7 +18,7 @@
 
 macOS（Apple Silicon / Intel）：
 
-[下载 MineAI Hub v1.0.3](https://github.com/welsione/MineAI-Hub/releases/latest)
+[下载 MineAI Hub v1.0.4](https://github.com/welsione/MineAI-Hub/releases/latest)
 
 > 首次打开提示"已损坏"是 macOS Gatekeeper 对未签名应用的阻拦，在终端执行以下命令后重新打开即可：
 > ```bash
@@ -28,6 +28,7 @@ macOS（Apple Silicon / Intel）：
 ## 功能
 
 - **多服务聚合** — 侧边栏一键切换 7 大 AI 服务商（DeepSeek / 豆包 / Kimi / 秘塔 / 千问 / MiniMax / 智谱），支持自定义添加
+- **原生桌面通知** — 页面内 AI 回复通知自动转为 macOS 原生通知，点击直达对应服务商
 - **服务商管理** — 启用/禁用、拖拽排序、自定义名称/网址/图标/侧边栏颜色
 - **服务缓存** — 切换不刷新页面，保留对话状态
 - **自动更新** — 应用内检查、下载、安装更新，随时保持最新版本
@@ -47,7 +48,7 @@ macOS（Apple Silicon / Intel）：
 
 ## 技术栈
 
-- Electron 35 + BrowserView
+- Electron 35 + BrowserView + TypeScript
 - 原生 CSS 变量主题系统
 
 ## 开发
