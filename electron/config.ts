@@ -73,7 +73,13 @@ const THEME_SCRIPTS: Record<string, string> = {
 
 // ===== Notification Bridge =====
 // 拦截页面内的 Notification API，通过 console.log 桥接回主进程，转发为原生通知
-const NOTIFY_BRIDGE = `(function(){var O=window.Notification;var PREFIX='__MINEAI_NOTIFY__:';window.Notification=function(t,o){try{console.log(PREFIX+JSON.stringify({title:t,body:o&&o.body||'',icon:o&&o.icon||'',tag:o&&o.tag||''}))}catch(e){}return new O(t,o)};Object.keys(O).forEach(function(k){try{window.Notification[k]=O[k]}catch(e){}});window.Notification.prototype=O.prototype;window.Notification.requestPermission=function(cb){var p=Promise.resolve('granted');if(cb){cb('granted')}return p}})()`
+// 接受 providerKey 和 icon 参数，直接嵌入到桥接消息中，避免主进程反查 webContents
+function buildNotifyBridge(providerKey: string, icon: string): string {
+  const safeKey = JSON.stringify(providerKey)
+  const safeIcon = JSON.stringify(icon)
+  return `(function(){var O=window.Notification;var PREFIX='__MINEAI_NOTIFY__:';var KEY=${safeKey};var ICO=${safeIcon};window.Notification=function(t,o){try{console.log(PREFIX+JSON.stringify({title:t,body:o&&o.body||'',icon:o&&o.icon||'',tag:o&&o.tag||'',_key:KEY,_ico:ICO}))}catch(e){}return new O(t,o)};Object.keys(O).forEach(function(k){try{window.Notification[k]=O[k]}catch(e){}});window.Notification.prototype=O.prototype;window.Notification.requestPermission=function(cb){var p=Promise.resolve('granted');if(cb){cb('granted')}return p}})()`
+}
+const NOTIFY_BRIDGE = buildNotifyBridge
 
 // ===== Shortcut Matching =====
 const MODIFIERS = new Set(['Meta', 'Control', 'Alt', 'Shift'])
@@ -127,7 +133,7 @@ export {
   THEME_BG,
   THEME_SCRIPTS,
   CHAT_INPUT_SELECTORS,
-  NOTIFY_BRIDGE,
+  buildNotifyBridge,
   parseShortcut,
   matchesKeyEvent
 }

@@ -15,7 +15,7 @@ import {
   POPUP_WIDTH,
   POPUP_HEIGHT,
   THEME_SCRIPTS,
-  NOTIFY_BRIDGE,
+  buildNotifyBridge,
   CHAT_INPUT_SELECTORS,
   matchesKeyEvent,
   Provider
@@ -147,8 +147,7 @@ function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
     try {
       const data = JSON.parse(message.slice('__MINEAI_NOTIFY__:'.length))
       if (data.title) {
-        const info = (wc as any)._mineaiProvider as { key: string; icon: string } | undefined
-        showNativeNotification(data.title, data.body || '', info?.icon, info?.key)
+        showNativeNotification(data.title, data.body || '', data._ico, data._key)
       }
     } catch { /* ignore malformed notify message */ }
   })
@@ -609,8 +608,6 @@ function switchProvider(key: string): void {
       }
     })
     views.set(key, view)
-    // 将 provider 信息挂到 webContents 上，供通知桥接使用
-    ;(view.webContents as any)._mineaiProvider = { key: provider.key, icon: provider.icon }
 
     // 安全：外链在浏览器中打开，不在应用内开新窗口
     view.webContents.setWindowOpenHandler(({ url }) => {
@@ -638,7 +635,7 @@ function switchProvider(key: string): void {
       // 注入 no-drag，确保 BrowserView 内容可点击
       view!.webContents.insertCSS('*,*::before,*::after{-webkit-app-region:no-drag!important}').catch(e => log.error('insertCSS failed:', e))
       // 注入通知拦截脚本（聚合页面内 Notification 到原生通知）
-      view!.webContents.executeJavaScript(NOTIFY_BRIDGE).catch(e => log.error('notify bridge inject failed:', e))
+      view!.webContents.executeJavaScript(buildNotifyBridge(provider.key, provider.icon)).catch(e => log.error('notify bridge inject failed:', e))
       // 对需要重载的服务商延迟注入主题，等页面 JS 初始化完成读取 localStorage
       const themeDelay = NEEDS_THEME_RELOAD.has(key) ? 300 : 0
       setTimeout(() => {
@@ -669,11 +666,6 @@ function switchProvider(key: string): void {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: 'Renderer crashed' })
       }
     })
-  }
-
-  // 确保已存在 view 也有 provider 信息（通知桥接需要）
-  if (view.webContents && !view.webContents.isDestroyed()) {
-    ;(view.webContents as any)._mineaiProvider = { key: provider.key, icon: provider.icon }
   }
 
   currentProviderKey = key
