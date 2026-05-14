@@ -1,6 +1,6 @@
 {
   "name": "mineai-hub",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI 服务聚合桌面应用",
   "main": "out/main/index.js",
   "scripts": {
