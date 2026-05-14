@@ -115,24 +115,6 @@ function showNativeNotification(title: string, body: string, iconDataUrl?: strin
   n.show()
 }
 
-// 当图标无法被正常解析时，生成纯色方块作为最后回退
-// 根据 webContents 查找对应服务商的 key 和图标
-function findProviderByWebContents(wc: Electron.WebContents): { key: string; icon: string } | null {
-  for (const [key, view] of views) {
-    if (view?.webContents?.id === wc.id) {
-      const merged = getMergedProviders()
-      const p = merged.find(x => x.key === key)
-      return p ? { key: p.key, icon: p.icon } : null
-    }
-  }
-  return null
-}
-
-// 根据 webContents 查找对应服务商的图标
-function findProviderIcon(wc: Electron.WebContents): string | undefined {
-  return findProviderByWebContents(wc)?.icon
-}
-
 // ===== Notification Bridge =====
 // 监听所有 BrowserView 的 console.log 消息，拦截页面内 Notification 调用
 function setupNotificationBridge(): void {
@@ -165,7 +147,7 @@ function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
     try {
       const data = JSON.parse(message.slice('__MINEAI_NOTIFY__:'.length))
       if (data.title) {
-        const info = findProviderByWebContents(wc)
+        const info = (wc as any)._mineaiProvider as { key: string; icon: string } | undefined
         showNativeNotification(data.title, data.body || '', info?.icon, info?.key)
       }
     } catch { /* ignore malformed notify message */ }
@@ -627,6 +609,8 @@ function switchProvider(key: string): void {
       }
     })
     views.set(key, view)
+    // 将 provider 信息挂到 webContents 上，供通知桥接使用
+    ;(view.webContents as any)._mineaiProvider = { key: provider.key, icon: provider.icon }
 
     // 安全：外链在浏览器中打开，不在应用内开新窗口
     view.webContents.setWindowOpenHandler(({ url }) => {
@@ -685,6 +669,11 @@ function switchProvider(key: string): void {
         getActiveWin()?.webContents?.send('loading', { provider: key, status: 'error', error: 'Renderer crashed' })
       }
     })
+  }
+
+  // 确保已存在 view 也有 provider 信息（通知桥接需要）
+  if (view.webContents && !view.webContents.isDestroyed()) {
+    ;(view.webContents as any)._mineaiProvider = { key: provider.key, icon: provider.icon }
   }
 
   currentProviderKey = key
