@@ -21,7 +21,7 @@ function detectMimeFromBuffer(buf: Buffer): string {
 
 // ===== ICO 解析 =====
 // 从 ICO 容器中提取最大的 PNG 编码图像
-function extractPNGFromICO(icoBuf: Buffer): Buffer | null {
+function extractPNGFromICO(icoBuf: Buffer): Uint8Array | null {
   try {
     if (icoBuf.length < 22) return null
     if (icoBuf.readUInt16LE(0) !== 0) return null
@@ -63,13 +63,15 @@ function tryFetchIcon(iconUrl: string): Promise<string | null> {
           // ICO 格式：提取内嵌 PNG，因为 nativeImage 不支持 ICO
           const ct = response.headers['content-type']
           let mime = Array.isArray(ct) ? ct[0] : ct
-          let data = buf
           if (!mime) mime = detectMimeFromBuffer(buf)
           if (mime === 'image/x-icon' || mime?.includes('icon')) {
             const png = extractPNGFromICO(buf)
-            if (png) { mime = 'image/png'; data = png }
+            if (png) {
+              resolve(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
+              return
+            }
           }
-          resolve(`data:${mime};base64,${data.toString('base64')}`)
+          resolve(`data:${mime};base64,${buf.toString('base64')}`)
         })
       })
       request.on('error', () => resolve(null))
@@ -131,6 +133,11 @@ export async function fetchFavicon(siteUrl: string): Promise<string | null> {
   return null
 }
 
+// 直接按 URL 抓取图标（供设置页手动输入图标网址使用）
+export function fetchIconByUrl(iconUrl: string): Promise<string | null> {
+  return tryFetchIcon(iconUrl)
+}
+
 // ===== 自定义服务商首字母图标 =====
 export function generateLetterIcon(name: string): string {
   const letter = (name || '?').charAt(0).toUpperCase()
@@ -150,12 +157,13 @@ export function dataUrlToNativeImage(dataUrl: string): NativeImage | null {
   try {
     const base64 = dataUrl.split(',')[1]
     if (base64) {
-      let raw = Buffer.from(base64, 'base64')
+      const raw = Buffer.from(base64, 'base64')
+      let bufForNative: Buffer = raw
       if (dataUrl.includes('image/x-icon') || dataUrl.includes('icon')) {
         const png = extractPNGFromICO(raw)
-        if (png) raw = png
+        if (png) bufForNative = Buffer.from(png)
       }
-      img = nativeImage.createFromBuffer(raw)
+      img = nativeImage.createFromBuffer(bufForNative)
       if (!img.isEmpty()) return img
     }
   } catch { /* ignore */ }

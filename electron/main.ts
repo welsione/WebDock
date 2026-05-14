@@ -20,7 +20,7 @@ import {
   matchesKeyEvent,
   Provider
 } from './config'
-import { APP_ICON, fetchFavicon, generateLetterIcon, dataUrlToNativeImage, writeIconToTempFile } from './icons'
+import { APP_ICON, fetchFavicon, fetchIconByUrl, generateLetterIcon, dataUrlToNativeImage, writeIconToTempFile } from './icons'
 
 // ===== Types =====
 interface CustomProvider {
@@ -156,9 +156,10 @@ function setupNotificationBridge(): void {
 }
 
 function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
-  if ((wc as Record<string, unknown>)._notifyListened) return
-  ;(wc as Record<string, unknown>)._notifyListened = true
-  wc.on('console-message', (_event: Electron.Event, details: Electron.WebContentsConsoleMessageEventParams) => {
+  if ((wc as unknown as Record<string, unknown>)._notifyListened) return
+  ;(wc as unknown as Record<string, unknown>)._notifyListened = true
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(wc as any).on('console-message', (_event: Electron.Event, details: Electron.WebContentsConsoleMessageEventParams) => {
     const message = details.message
     if (!message || !message.startsWith('__MINEAI_NOTIFY__:')) return
     try {
@@ -824,7 +825,7 @@ function setupIPC(): void {
 
   // 从 URL 获取图标（供设置页手动输入图标网址使用）
   ipcMain.handle('fetch-icon-url', async (_event, iconUrl: string) => {
-    return await tryFetchIcon(iconUrl)
+    return await fetchIconByUrl(iconUrl)
   })
 
   // 剪贴板注入：将剪贴板内容粘贴到当前服务商的输入框
@@ -1001,7 +1002,7 @@ function setupMenu(): void {
           }
         }
       ]
-    }] : [])
+    } as Electron.MenuItemConstructorOptions] : [])
   ]
 
   const menu = Menu.buildFromTemplate(template)
