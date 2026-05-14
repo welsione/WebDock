@@ -7,7 +7,7 @@ import log from 'electron-log'
 const appIconBaseDir = app.isPackaged
   ? path.join(process.resourcesPath, 'assets')
   : path.join(__dirname, '..', '..', 'assets')
-export const APP_ICON = `data:image/png;base64,${fs.readFileSync(path.join(appIconBaseDir, 'AppIcon.iconset', 'icon_128x128.png')).toString('base64')}`
+export const APP_ICON = `data:image/png;base64,${fs.readFileSync(path.join(appIconBaseDir, 'app-icon.png')).toString('base64')}`
 
 // ===== MIME 检测 =====
 function detectMimeFromBuffer(buf: Buffer): string {
