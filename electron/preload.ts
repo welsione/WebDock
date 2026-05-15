@@ -24,18 +24,28 @@ export interface UpdateStatusCallback {
   (data: { status: string; version?: string; percent?: number; error?: string }): void
 }
 
+// 内置服务商信息（icon 和 color 必填）
 export interface ProviderInfo {
   key: string
   name: string
   url: string
   icon: string
+  color: { dark: string; light: string }
+}
+
+// 自定义服务商信息（icon 和 color 可选）
+export interface CustomProviderInfo {
+  key: string
+  name: string
+  url: string
+  icon?: string | null
   color?: { dark: string; light: string }
 }
 
 export interface ProviderSettings {
-  builtIn: Array<{ key: string; name: string; url: string; icon: string; color?: { dark: string; light: string } }>
+  builtIn: Array<{ key: string; name: string; url: string; icon: string; color: { dark: string; light: string } }>
   enabled: string[] | null
-  custom: ProviderInfo[]
+  custom: CustomProviderInfo[]
   order: string[] | null
 }
 

@@ -59,9 +59,16 @@ export function renderProviderList(): void {
     el.draggable = true
     el.dataset.key = item.key
 
+    // 安全转义 HTML 特殊字符
+    const escapeHtml = (str: string): string => {
+      const div = document.createElement('div')
+      div.textContent = str
+      return div.innerHTML
+    }
+
     const iconHtml = item.icon
-      ? `<img src="${item.icon}" alt="${item.name}">`
-      : `<div style="width:28px;height:28px;border-radius:6px;background:var(--surface-3);display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">${(item.name || '?')[0].toUpperCase()}</div>`
+      ? `<img src="${escapeHtml(item.icon)}" alt="${escapeHtml(item.name)}">`
+      : `<div style="width:28px;height:28px;border-radius:6px;background:var(--surface-3);display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">${escapeHtml((item.name || '?')[0].toUpperCase())}</div>`
     const deleteHtml =
       item.type === 'custom'
         ? `<button class="provider-delete" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
@@ -73,9 +80,9 @@ export function renderProviderList(): void {
       </div>
       <input type="checkbox" class="provider-checkbox" ${item.checked ? 'checked' : ''}>
       ${iconHtml}
-      <div class="provider-item-info" data-key="${item.key}" data-type="${item.type}" data-index="${item.index ?? ''}">
-        <div class="provider-item-name">${item.name}</div>
-        <div class="provider-item-url">${item.url}</div>
+      <div class="provider-item-info" data-key="${escapeHtml(item.key)}" data-type="${item.type}" data-index="${item.index ?? ''}">
+        <div class="provider-item-name">${escapeHtml(item.name)}</div>
+        <div class="provider-item-url">${escapeHtml(item.url)}</div>
       </div>
       ${deleteHtml}
     `

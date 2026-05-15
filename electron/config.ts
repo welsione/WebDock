@@ -57,6 +57,15 @@ const EDGE_PILL_HEIGHT = 72
 const POPUP_WIDTH = 500
 const POPUP_HEIGHT = 700
 
+// ===== Timing Constants =====
+const UPDATE_CHECK_DELAY_MS = 5000      // 启动后延迟检查更新
+const THEME_RELOAD_DELAY_MS = 100       // 主题切换后重载延迟
+const THEME_INJECT_DELAY_MS = 300       // 需重载服务商的主题注入延迟
+const ICON_FETCH_TIMEOUT_MS = 3000      // 图标获取超时
+const HTML_ICONS_TIMEOUT_MS = 5000      // HTML 解析图标超时
+const BOUNDS_SAVE_DELAY_MS = 500        // 窗口位置保存延迟
+const RESIZE_UPDATE_DELAY_MS = 16       // 窗口大小更新延迟（约 60fps）
+
 // ===== Theme Scripts =====
 const THEME_BG: Record<string, string> = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
 
@@ -134,7 +143,15 @@ export {
   CHAT_INPUT_SELECTORS,
   buildNotifyBridge,
   parseShortcut,
-  matchesKeyEvent
+  matchesKeyEvent,
+  // Timing constants
+  UPDATE_CHECK_DELAY_MS,
+  THEME_RELOAD_DELAY_MS,
+  THEME_INJECT_DELAY_MS,
+  ICON_FETCH_TIMEOUT_MS,
+  HTML_ICONS_TIMEOUT_MS,
+  BOUNDS_SAVE_DELAY_MS,
+  RESIZE_UPDATE_DELAY_MS
 }
 
 export type { Provider, ProviderColor, KeyEvent }

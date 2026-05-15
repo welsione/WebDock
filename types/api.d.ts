@@ -2,8 +2,8 @@ interface ProviderInfo {
   key: string
   name: string
   url: string
-  icon: string | null
-  color?: { dark: string; light: string }
+  icon: string
+  color: { dark: string; light: string }
 }
 
 interface ProviderColor {
@@ -12,9 +12,9 @@ interface ProviderColor {
 }
 
 interface ProviderSettings {
-  builtIn: Array<{ key: string; name: string; url: string; icon: string; color?: { dark: string; light: string } }>
+  builtIn: Array<{ key: string; name: string; url: string; icon: string; color: { dark: string; light: string } }>
   enabled: string[] | null
-  custom: ProviderInfo[]
+  custom: Array<{ key: string; name: string; url: string; icon: string | null; color?: { dark: string; light: string } }>
   order: string[] | null
 }
 

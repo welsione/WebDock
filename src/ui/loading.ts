@@ -22,6 +22,7 @@ export function showLoading(text = '正在加载…'): void {
 }
 
 export function hideLoading(): void {
+  if (!isLoading) return  // 防止未调用 showLoading 时出错
   const elapsed = Date.now() - loadingStartTime
   const delay = Math.max(0, MIN_LOADING_MS - elapsed)
   if (hideLoadingTimer) clearTimeout(hideLoadingTimer)

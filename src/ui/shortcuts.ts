@@ -22,17 +22,36 @@ export function setupShortcutRecording(
   const input = document.getElementById(inputId) as HTMLElement
   if (!input) return
   let keys: string[] = []
+  let recording = false
+
+  const cancelRecording = async () => {
+    if (!recording) return
+    recording = false
+    input.classList.remove('recording')
+    const s = await onRefresh()
+    input.textContent = s || '未设置'
+  }
 
   input.addEventListener('click', () => {
+    recording = true
     input.classList.add('recording')
     input.textContent = '请按键…'
     keys = []
     setKeys([])
   })
 
+  // 失去焦点时取消录制
+  input.addEventListener('blur', cancelRecording)
+
+  // 按 Escape 取消录制
   input.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!recording) return
+    if (e.code === 'Escape') {
+      e.preventDefault()
+      cancelRecording()
+      return
+    }
     e.preventDefault()
-    if (!input.classList.contains('recording')) return
     keys = []
     if (e.metaKey) keys.push('Meta')
     if (e.ctrlKey) keys.push('Control')
@@ -47,8 +66,13 @@ export function setupShortcutRecording(
   })
 
   input.addEventListener('keyup', async () => {
+    if (!recording) return
+    recording = false
     input.classList.remove('recording')
-    if (keys.length > 1) {
+    // 需要至少一个修饰键和一个普通键
+    const hasModifier = keys.some(k => ['Meta', 'Control', 'Alt', 'Shift'].includes(k))
+    const hasKey = keys.some(k => !['Meta', 'Control', 'Alt', 'Shift'].includes(k))
+    if (hasModifier && hasKey) {
       const acc = keys.join('+')
       const result = await onSave(acc)
       if (result.ok) {
@@ -60,6 +84,7 @@ export function setupShortcutRecording(
         input.textContent = s || '未设置'
       }
     } else {
+      // 单按修饰键或普通键，视为取消
       const s = await onRefresh()
       input.textContent = s || '未设置'
     }

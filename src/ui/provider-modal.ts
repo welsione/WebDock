@@ -34,7 +34,13 @@ export function initProviderModal(): void {
     reader.onload = () => {
       modalIconData = reader.result as string
       const preview = document.getElementById('iconPreview')
-      if (preview) preview.innerHTML = `<img src="${modalIconData}" alt="预览">`
+      if (preview) {
+        preview.innerHTML = ''
+        const img = document.createElement('img')
+        img.src = modalIconData
+        img.alt = '预览'
+        preview.appendChild(img)
+      }
     }
     reader.readAsDataURL(file)
   })
@@ -51,7 +57,13 @@ export function initProviderModal(): void {
     if (result) {
       modalIconData = result
       const preview = document.getElementById('iconPreview')
-      if (preview) preview.innerHTML = `<img src="${modalIconData}" alt="预览">`
+      if (preview) {
+        preview.innerHTML = ''
+        const img = document.createElement('img')
+        img.src = modalIconData
+        img.alt = '预览'
+        preview.appendChild(img)
+      }
     }
     btn.textContent = '获取'
     btn.disabled = false
@@ -99,10 +111,17 @@ export function openEditModal(item: {
   setInput('modalIconUrl', '')
   modalIconData = null
 
-  if (item.icon && item.icon.startsWith('data:')) {
-    setHtml('iconPreview', `<img src="${item.icon}" alt="预览">`)
-  } else {
-    setHtml('iconPreview', item.name ? item.name[0].toUpperCase() : '?')
+  const preview = document.getElementById('iconPreview')
+  if (preview) {
+    preview.innerHTML = ''
+    if (item.icon && item.icon.startsWith('data:')) {
+      const img = document.createElement('img')
+      img.src = item.icon
+      img.alt = '预览'
+      preview.appendChild(img)
+    } else {
+      preview.textContent = item.name ? item.name[0].toUpperCase() : '?'
+    }
   }
 
   const color = item.color || { dark: '#1a1e28', light: '#f0f2f5' }
@@ -114,6 +133,11 @@ export function openEditModal(item: {
 
 export function closeModal(): void {
   document.getElementById('addProviderModal')?.classList.remove('visible')
+  // 清理状态
+  modalIconData = null
+  modalEditTarget = null
+  // 清理图标 URL 输入框
+  setInput('modalIconUrl', '')
 }
 
 function showFields(show: boolean): void {

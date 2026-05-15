@@ -31,7 +31,13 @@ export function initUpdateBanner(
     if (text === '下载更新') {
       btnUpdateAction.textContent = '下载中…'
       ;(btnUpdateAction as HTMLButtonElement).disabled = true
-      await window.electronAPI.downloadUpdate()
+      const result = await window.electronAPI.downloadUpdate()
+      if (!result.ok) {
+        btnUpdateAction.textContent = '下载更新'
+        ;(btnUpdateAction as HTMLButtonElement).disabled = false
+        // 显示错误提示
+        updateBannerText.textContent = '下载失败，请稍后重试'
+      }
     } else if (text === '安装并重启') {
       window.electronAPI.installUpdate()
     }
@@ -53,7 +59,11 @@ export function setupUpdateStatusListener(): void {
         updateBtn.disabled = true
         window.electronAPI.downloadUpdate()
       }
-      updateBannerText.innerHTML = `发现新版本 <strong>v${data.version}</strong>`
+      updateBannerText.textContent = ''  // 清空
+      const strong = document.createElement('strong')
+      strong.textContent = `v${data.version}`
+      updateBannerText.appendChild(document.createTextNode('发现新版本 '))
+      updateBannerText.appendChild(strong)
       btnUpdateAction.textContent = '下载更新'
       ;(btnUpdateAction as HTMLButtonElement).disabled = false
       updateProgress.style.display = 'none'

@@ -39,23 +39,28 @@ function syncFocusUI(isFocus: boolean): void {
 }
 function toggleFocus(): void {
   syncFocusUI(!focusMode)
-  if (focusMode) {
-    setTimeout(() => {
-      window.electronAPI.notifySidebarState(focusMode)
-    }, 250)
-  } else {
+  // 统一延迟通知，等待 CSS 动画完成
+  setTimeout(() => {
     window.electronAPI.notifySidebarState(focusMode)
-  }
+  }, 250)
 }
 
 // ===== Action Buttons =====
+let reloadCooldown = false
 document.getElementById('reloadFrame')?.addEventListener('click', () => {
+  if (reloadCooldown) return
+  reloadCooldown = true
   window.electronAPI.reload()
   showStatus('已重载')
+  setTimeout(() => { reloadCooldown = false }, 1000)
 })
 
 document.getElementById('pasteClipboard')?.addEventListener('click', async () => {
+  const btn = document.getElementById('pasteClipboard') as HTMLButtonElement
+  if (btn.disabled) return
+  btn.disabled = true
   const result = await window.electronAPI.injectClipboard()
+  btn.disabled = false
   if (result.ok) {
     toast('已粘贴剪贴板内容')
   } else {
@@ -142,17 +147,21 @@ setupShortcutRecording(
 
 // ===== Settings page check update =====
 document.getElementById('btnCheckUpdate')?.addEventListener('click', async () => {
-  const btn = document.getElementById('btnCheckUpdate') as HTMLElement
+  const btn = document.getElementById('btnCheckUpdate') as HTMLButtonElement
   const hint = document.getElementById('updateHint') as HTMLElement
   btn.textContent = '检查中…'
-  ;(btn as HTMLButtonElement).disabled = true
+  btn.disabled = true
   hint.textContent = '正在连接更新服务器…'
   const result = await window.electronAPI.checkUpdate()
   if (!result.ok) {
     hint.textContent = '检查失败，请稍后重试'
-    btn.textContent = '检查更新'
-    ;(btn as HTMLButtonElement).disabled = false
+  } else if (result.hasUpdate) {
+    hint.textContent = '发现新版本，请查看顶部更新提示'
+  } else {
+    hint.textContent = '当前已是最新版本'
   }
+  btn.textContent = '检查更新'
+  btn.disabled = false
 })
 
 // ===== Provider settings refresh listener =====

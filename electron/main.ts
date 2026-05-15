@@ -18,6 +18,11 @@ import {
   buildNotifyBridge,
   CHAT_INPUT_SELECTORS,
   matchesKeyEvent,
+  UPDATE_CHECK_DELAY_MS,
+  THEME_RELOAD_DELAY_MS,
+  THEME_INJECT_DELAY_MS,
+  BOUNDS_SAVE_DELAY_MS,
+  RESIZE_UPDATE_DELAY_MS,
   Provider
 } from './config'
 import { APP_ICON, fetchFavicon, fetchIconByUrl, generateLetterIcon, dataUrlToNativeImage, writeIconToTempFile } from './icons'
@@ -196,11 +201,28 @@ function toggleWindowVisibility(): void {
 }
 
 // ===== Global Shortcut =====
-function registerGlobalShortcut(acc: string): void {
-  globalShortcut.unregisterAll()
-  if (!acc) return
+function registerGlobalShortcut(acc: string): { ok: boolean; error?: string } {
+  // 先注销当前快捷键（如果存在）
+  if (currentShortcut) {
+    globalShortcut.unregister(currentShortcut)
+  }
+  if (!acc) {
+    currentShortcut = ''
+    return { ok: true }
+  }
   const registered = globalShortcut.register(acc, toggleWindowVisibility)
-  if (!registered) log.error('Failed to register global shortcut:', acc)
+  if (registered) {
+    currentShortcut = acc
+    return { ok: true }
+  }
+  // 注册失败，尝试恢复旧快捷键
+  if (currentShortcut) {
+    const restored = globalShortcut.register(currentShortcut, toggleWindowVisibility)
+    if (!restored) {
+      log.error('Failed to restore previous shortcut:', currentShortcut)
+    }
+  }
+  return { ok: false, error: '快捷键被占用或无效，请尝试其他组合' }
 }
 
 // ===== App Ready =====
@@ -222,7 +244,10 @@ app.whenReady().then(() => {
   setupIPC()
   createMainWindow()
   setupMenu()
-  registerGlobalShortcut(currentShortcut)
+  const shortcutResult = registerGlobalShortcut(currentShortcut)
+  if (!shortcutResult.ok) {
+    log.error('Failed to register initial global shortcut:', shortcutResult.error)
+  }
 
   // 自动更新（仅在打包后生效）
   if (app.isPackaged) {
@@ -265,7 +290,7 @@ function setupAutoUpdater(): void {
   })
 
   // 启动后延迟检查更新
-  setTimeout(() => autoUpdater.checkForUpdates().catch(e => log.error('checkForUpdates failed:', e)), 5000)
+  setTimeout(() => autoUpdater.checkForUpdates().catch(e => log.error('checkForUpdates failed:', e)), UPDATE_CHECK_DELAY_MS)
 }
 
 function notifyRenderer(channel: string, data: Record<string, unknown>): void {
@@ -280,13 +305,20 @@ function notifyRenderer(channel: string, data: Record<string, unknown>): void {
 // ===== Validate Bounds =====
 function isValidBounds(bounds: { x: number; y: number; width: number; height: number } | null): boolean {
   if (!bounds) return false
+  if (bounds.width < 600 || bounds.height < 400) return false
   const displays = screen.getAllDisplays()
   return displays.some(d => {
     const { x, y, width, height } = d.workArea
-    return bounds.x >= x - bounds.width + 100 &&
-           bounds.x <= x + width - 100 &&
-           bounds.y >= y &&
-           bounds.y <= y + height - 100
+    // 检查窗口左上角和右下角都在屏幕范围内（允许部分超出 100px）
+    const leftOk = bounds.x >= x - 100
+    const rightOk = bounds.x + bounds.width <= x + width + 100
+    const topOk = bounds.y >= y - 100
+    const bottomOk = bounds.y + bounds.height <= y + height + 100
+    // 至少窗口中心点在屏幕内
+    const centerX = bounds.x + bounds.width / 2
+    const centerY = bounds.y + bounds.height / 2
+    const centerInDisplay = centerX >= x && centerX <= x + width && centerY >= y && centerY <= y + height
+    return leftOk && rightOk && topOk && bottomOk && centerInDisplay
   })
 }
 
@@ -333,7 +365,7 @@ function createMainWindow(): void {
     resizeTimer = setTimeout(() => {
       resizeTimer = null
       updateBrowserViewBounds()
-    }, 16)
+    }, RESIZE_UPDATE_DELAY_MS)
   })
 
   // 窗口移动/调整大小时延迟保存位置到磁盘
@@ -343,7 +375,7 @@ function createMainWindow(): void {
     boundsSaveTimer = setTimeout(() => {
       boundsSaveTimer = null
       saveWindowBounds()
-    }, 500)
+    }, BOUNDS_SAVE_DELAY_MS)
   }
   mainWindow.on('resize', scheduleBoundsSave)
   mainWindow.on('move', scheduleBoundsSave)
@@ -551,7 +583,7 @@ function createEdgeWindow(parentWin: BrowserWindow): void {
       edgeMoveTimer = null
       if (!edgeWindow) return
       updateEdgeWindowPosition()
-    }, 16)
+    }, RESIZE_UPDATE_DELAY_MS)
   }
   parentWin.on('move', updateEdge)
   parentWin.on('resize', updateEdge)
@@ -576,9 +608,33 @@ function updateEdgeWindowPosition(): void {
 function destroyEdgeWindow(): void {
   if (edgeWindow) {
     const win = edgeWindow as unknown as Record<string, unknown>
-    if (typeof (win._cleanup) === 'function') (win._cleanup as () => void)()
-    edgeWindow.close()
+    if (typeof (win._cleanup) === 'function') {
+      try {
+        (win._cleanup as () => void)()
+      } catch (e) {
+        log.error('Failed to cleanup edgeWindow listeners:', e)
+      }
+    }
+    try {
+      edgeWindow.close()
+    } catch (e) {
+      log.error('Failed to close edgeWindow:', e)
+    }
     edgeWindow = null
+  }
+}
+
+// 清理指定服务商的 BrowserView 缓存
+function destroyBrowserView(key: string): void {
+  const view = views.get(key)
+  if (view) {
+    const win = getActiveWin()
+    if (win && !win.isDestroyed()) {
+      try {
+        win.removeBrowserView(view)
+      } catch { /* may already be removed */ }
+    }
+    views.delete(key)
   }
 }
 
@@ -637,7 +693,7 @@ function switchProvider(key: string): void {
       // 注入通知拦截脚本（聚合页面内 Notification 到原生通知）
       view!.webContents.executeJavaScript(buildNotifyBridge(provider.key, provider.icon)).catch(e => log.error('notify bridge inject failed:', e))
       // 对需要重载的服务商延迟注入主题，等页面 JS 初始化完成读取 localStorage
-      const themeDelay = NEEDS_THEME_RELOAD.has(key) ? 300 : 0
+      const themeDelay = NEEDS_THEME_RELOAD.has(key) ? THEME_INJECT_DELAY_MS : 0
       setTimeout(() => {
         if (view!.webContents && !view!.webContents.isDestroyed()) {
           view!.webContents.executeJavaScript(THEME_SCRIPTS[currentTheme]).catch(e => log.error('executeJavaScript(theme) failed:', e))
@@ -716,6 +772,15 @@ function setupIPC(): void {
     order: providerOrder
   }))
   ipcMain.handle('save-provider-settings', (_event, settings: { enabled: string[] | null; custom: CustomProvider[]; builtInColors?: Record<string, { dark: string; light: string }> }) => {
+    // 检测被删除的自定义服务商，清理其 BrowserView
+    const oldCustomKeys = new Set(customProviders.map(p => p.key))
+    const newCustomKeys = new Set((settings.custom || []).map(p => p.key))
+    for (const key of oldCustomKeys) {
+      if (!newCustomKeys.has(key)) {
+        destroyBrowserView(key)
+      }
+    }
+
     enabledProviders = settings.enabled
     customProviders = settings.custom || []
     if (settings.builtInColors) {
@@ -768,25 +833,11 @@ function setupIPC(): void {
 
   ipcMain.handle('get-shortcut', () => currentShortcut)
   ipcMain.handle('set-shortcut', (_event, acc: string) => {
-    if (!acc) {
-      globalShortcut.unregisterAll()
-      currentShortcut = ''
+    const result = registerGlobalShortcut(acc)
+    if (result.ok) {
       saveSettings()
-      return { ok: true }
     }
-    // 尝试注册新快捷键，检测冲突
-    globalShortcut.unregisterAll()
-    const registered = globalShortcut.register(acc, toggleWindowVisibility)
-    if (registered) {
-      currentShortcut = acc
-      saveSettings()
-      return { ok: true }
-    }
-    // 注册失败，恢复旧快捷键
-    if (currentShortcut) {
-      globalShortcut.register(currentShortcut, toggleWindowVisibility)
-    }
-    return { ok: false, error: '快捷键被占用或无效，请尝试其他组合' }
+    return result
   })
 
   ipcMain.handle('get-switch-shortcut', () => switchShortcut)
@@ -817,18 +868,21 @@ function setupIPC(): void {
     if (!view || !view.webContents || view.webContents.isDestroyed()) {
       return { ok: false, error: '服务商未加载' }
     }
+    // 使用预定义的选择器，避免注入风险
     const selector = CHAT_INPUT_SELECTORS[currentProviderKey] || 'textarea, div[contenteditable="true"]'
+    // 对文本进行安全转义
+    const escapedText = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
     try {
       await view.webContents.executeJavaScript(`
         (function() {
-          var el = document.querySelector('${selector}');
+          var el = document.querySelector(${JSON.stringify(selector)});
           if (!el) return false;
           el.focus();
           if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-            el.value = ${JSON.stringify(text)};
+            el.value = \`${escapedText}\`;
             el.dispatchEvent(new Event('input', { bubbles: true }));
           } else {
-            el.textContent = ${JSON.stringify(text)};
+            el.textContent = \`${escapedText}\`;
             el.dispatchEvent(new Event('input', { bubbles: true }));
           }
           return true;
@@ -868,7 +922,7 @@ function setupIPC(): void {
             if (view.webContents && !view.webContents.isDestroyed()) {
               view.webContents.reload()
             }
-          }, 100)
+          }, THEME_RELOAD_DELAY_MS)
         }
       }).catch(e => log.error('theme executeJavaScript failed:', e))
       // 主题切换后更新侧边栏颜色

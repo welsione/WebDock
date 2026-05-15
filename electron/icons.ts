@@ -2,6 +2,7 @@ import { app, nativeImage, NativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import log from 'electron-log'
+import { ICON_FETCH_TIMEOUT_MS, HTML_ICONS_TIMEOUT_MS } from './config'
 
 // ===== App Icon =====
 const appIconBaseDir = app.isPackaged
@@ -75,7 +76,7 @@ function tryFetchIcon(iconUrl: string): Promise<string | null> {
         })
       })
       request.on('error', () => resolve(null))
-      setTimeout(() => { try { request.abort() } catch { /* ignore */ } }, 3000)
+      setTimeout(() => { try { request.abort() } catch { /* ignore */ } }, ICON_FETCH_TIMEOUT_MS)
       request.end()
     } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); resolve(null) }
   })
@@ -107,7 +108,7 @@ function fetchHtmlIcons(pageUrl: string): Promise<string[]> {
         })
       })
       req.on('error', () => resolve([]))
-      setTimeout(() => { try { req.abort() } catch { /* ignore */ } }, 5000)
+      setTimeout(() => { try { req.abort() } catch { /* ignore */ } }, HTML_ICONS_TIMEOUT_MS)
       req.end()
     } catch { resolve([]) }
   })
