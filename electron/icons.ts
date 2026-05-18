@@ -51,16 +51,22 @@ function extractPNGFromICO(icoBuf: Buffer): Uint8Array | null {
 // ===== 图标下载 =====
 function tryFetchIcon(iconUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
+    let resolved = false
+    const doResolve = (value: string | null) => {
+      if (resolved) return
+      resolved = true
+      resolve(value)
+    }
     try {
       const { net } = require('electron')
       const request = net.request(iconUrl)
       request.on('response', (response: Electron.IncomingMessage) => {
-        if (response.statusCode !== 200) { resolve(null); return }
+        if (response.statusCode !== 200) { doResolve(null); return }
         const chunks: Buffer[] = []
         response.on('data', (chunk: Buffer) => chunks.push(chunk))
         response.on('end', () => {
           const buf = Buffer.concat(chunks)
-          if (buf.length < 100) { resolve(null); return }
+          if (buf.length < 100) { doResolve(null); return }
           // ICO 格式：提取内嵌 PNG，因为 nativeImage 不支持 ICO
           const ct = response.headers['content-type']
           let mime = Array.isArray(ct) ? ct[0] : ct
@@ -68,29 +74,38 @@ function tryFetchIcon(iconUrl: string): Promise<string | null> {
           if (mime === 'image/x-icon' || mime?.includes('icon')) {
             const png = extractPNGFromICO(buf)
             if (png) {
-              resolve(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
+              doResolve(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
               return
             }
           }
-          resolve(`data:${mime};base64,${buf.toString('base64')}`)
+          doResolve(`data:${mime};base64,${buf.toString('base64')}`)
         })
       })
-      request.on('error', () => resolve(null))
-      setTimeout(() => { try { request.abort() } catch { /* ignore */ } }, ICON_FETCH_TIMEOUT_MS)
+      request.on('error', () => doResolve(null))
+      setTimeout(() => {
+        try { request.abort() } catch { /* ignore */ }
+        doResolve(null)
+      }, ICON_FETCH_TIMEOUT_MS)
       request.end()
-    } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); resolve(null) }
+    } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); doResolve(null) }
   })
 }
 
 // 从页面 HTML 中解析图标链接
 function fetchHtmlIcons(pageUrl: string): Promise<string[]> {
   return new Promise((resolve) => {
+    let resolved = false
+    const doResolve = (value: string[]) => {
+      if (resolved) return
+      resolved = true
+      resolve(value)
+    }
     try {
       const { net } = require('electron')
       const req = net.request(pageUrl)
       let data = ''
       req.on('response', (response: Electron.IncomingMessage) => {
-        if (response.statusCode !== 200) { resolve([]); return }
+        if (response.statusCode !== 200) { doResolve([]); return }
         response.on('data', (chunk: Buffer) => { data += chunk.toString() })
         response.on('end', () => {
           const icons: string[] = []
@@ -104,13 +119,16 @@ function fetchHtmlIcons(pageUrl: string): Promise<string[]> {
             else if (!href.startsWith('http')) href = origin + '/' + href
             icons.push(href)
           }
-          resolve(icons)
+          doResolve(icons)
         })
       })
-      req.on('error', () => resolve([]))
-      setTimeout(() => { try { req.abort() } catch { /* ignore */ } }, HTML_ICONS_TIMEOUT_MS)
+      req.on('error', () => doResolve([]))
+      setTimeout(() => {
+        try { req.abort() } catch { /* ignore */ }
+        doResolve([])
+      }, HTML_ICONS_TIMEOUT_MS)
       req.end()
-    } catch { resolve([]) }
+    } catch { doResolve([]) }
   })
 }
 
