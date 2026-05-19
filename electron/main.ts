@@ -151,7 +151,9 @@ function setupWebContentsNotificationListener(wc: Electron.WebContents): void {
     if (!message || !message.startsWith('__MINEAI_NOTIFY__:')) return
     try {
       const data = JSON.parse(message.slice('__MINEAI_NOTIFY__:'.length))
+      log.info('Notification bridge received:', data.title, 'icon:', data._ico ? 'has icon' : 'no icon')
       if (data.title) {
+        // 使用服务商图标
         showNativeNotification(data.title, data.body || '', data._ico, data._key)
       }
     } catch { /* ignore malformed notify message */ }
