@@ -396,12 +396,25 @@ body.focus .update-banner {
   bottom: 0;
   background: var(--bg);
   z-index: 200;
-  display: none;
-  transition: left 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
   flex-direction: column;
   overflow-y: auto;
+  transform: translateX(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 200ms ease,
+              visibility 0ms 250ms,
+              left 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.settings-page.visible { display: flex; }
+.settings-page.visible {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 200ms ease,
+              visibility 0ms;
+}
 
 .settings-header {
   display: flex;
@@ -731,11 +744,18 @@ body.focus .settings-page {
   inset: 0;
   background: rgba(0,0,0,0.5);
   z-index: 500;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease, visibility 0ms 200ms;
 }
-.modal-overlay.visible { display: flex; }
+.modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 200ms ease, visibility 0ms;
+}
 .modal {
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -744,6 +764,11 @@ body.focus .settings-page {
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  transform: scale(0.95);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.modal-overlay.visible .modal {
+  transform: scale(1);
 }
 .modal-header {
   display: flex;
@@ -955,4 +980,40 @@ body.focus .settings-page {
 .provider-item.dragging .drag-handle { cursor: grabbing; }
 .provider-item.drag-over {
   border-top: 2px solid var(--accent);
+}
+
+/* 导航项图片样式（替代内联样式） */
+.nav-item-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+/* 首字母图标 */
+.provider-letter-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ===== 可访问性：减少动画 ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .settings-page,
+  .modal-overlay,
+  .modal {
+    transition: none !important;
+  }
 }
