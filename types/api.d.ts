@@ -1,3 +1,6 @@
+// ===== 全局类型声明 =====
+// 渲染进程和主进程共享的接口定义
+
 interface ProviderInfo {
   key: string
   name: string
@@ -51,7 +54,7 @@ interface ElectronAPI {
   fetchIconUrl: (url: string) => Promise<string | null>
   checkUpdate: () => Promise<{ ok: boolean; hasUpdate?: boolean; error?: string }>
   downloadUpdate: () => Promise<{ ok: boolean; error?: string }>
-  installUpdate: () => void
+  installUpdate: () => Promise<void>
   onUpdateStatus: (callback: (data: { status: string; version?: string; percent?: number; error?: string }) => void) => void
 }
 

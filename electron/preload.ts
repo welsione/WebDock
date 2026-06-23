@@ -78,8 +78,14 @@ export interface ElectronAPI {
   fetchIconUrl: (url: string) => Promise<string | null>
   checkUpdate: () => Promise<{ ok: boolean; hasUpdate?: boolean; error?: string }>
   downloadUpdate: () => Promise<{ ok: boolean; error?: string }>
-  installUpdate: () => void
+  installUpdate: () => Promise<void>
   onUpdateStatus: (callback: UpdateStatusCallback) => void
+}
+
+// 单次监听辅助：先移除旧 listener 再注册新的，防止累积
+function onceOn(channel: string, callback: (...args: unknown[]) => void): void {
+  ipcRenderer.removeAllListeners(channel)
+  ipcRenderer.on(channel, (_event, ...args: unknown[]) => callback(...args))
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -93,26 +99,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProviderSettings: () => ipcRenderer.invoke('get-provider-settings'),
   saveProviderSettings: (settings) => ipcRenderer.invoke('save-provider-settings', settings),
   saveProviderOrder: (order) => ipcRenderer.invoke('save-provider-order', order),
-  onProvidersUpdated: (callback) => {
-    ipcRenderer.on('providers-updated', (_event, providers) => callback(providers))
-  },
-  onLoading: (callback) => {
-    ipcRenderer.on('loading', (_event, data) => callback(data))
-  },
-  onSidebarColor: (callback) => {
-    ipcRenderer.on('sidebar-color', (_event, color) => callback(color))
-  },
-  onModeChange: (callback) => {
-    ipcRenderer.on('mode-changed', (_event, mode) => callback(mode))
-  },
-  onCurrentProviderChanged: (callback) => {
-    ipcRenderer.on('current-provider-changed', (_event, key) => callback(key))
-  },
+  onProvidersUpdated: (callback) => onceOn('providers-updated', (providers) => callback(providers)),
+  onLoading: (callback) => onceOn('loading', (data) => callback(data)),
+  onSidebarColor: (callback) => onceOn('sidebar-color', (color) => callback(color)),
+  onModeChange: (callback) => onceOn('mode-changed', (mode) => callback(mode)),
+  onCurrentProviderChanged: (callback) => onceOn('current-provider-changed', (key) => callback(key)),
   notifySidebarState: (collapsed: boolean) => ipcRenderer.send('sidebar-state', collapsed),
   notifyThemeChange: (theme: string) => ipcRenderer.send('theme-changed', theme),
-  onExitFocusMode: (callback) => {
-    ipcRenderer.on('exit-focus-mode', () => callback())
-  },
+  onExitFocusMode: (callback) => onceOn('exit-focus-mode', () => callback()),
   getShortcut: () => ipcRenderer.invoke('get-shortcut'),
   setShortcut: (acc: string) => ipcRenderer.invoke('set-shortcut', acc),
   getSwitchShortcut: () => ipcRenderer.invoke('get-switch-shortcut'),
@@ -124,7 +118,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  onUpdateStatus: (callback) => {
-    ipcRenderer.on('update-status', (_event, data) => callback(data))
-  }
+  onUpdateStatus: (callback) => onceOn('update-status', (data) => callback(data))
 } satisfies ElectronAPI)

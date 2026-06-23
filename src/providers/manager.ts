@@ -1,15 +1,15 @@
-import { getState } from '../state'
-import { openEditModal } from '../ui/provider-modal'
+import { getState, removeCustomProvider, setEnabledProviders } from '../state'
+import { escapeHtml } from '../utils/escape-html'
+import { byIdOrNull } from '../utils/dom'
 
 let dragSrcEl: HTMLElement | null = null
 
 export function renderProviderList(): void {
-  const list = document.getElementById('providerList')
+  const list = byIdOrNull<HTMLDivElement>('providerList')
   if (!list) return
   list.innerHTML = ''
   const { builtIn, enabled, custom } = getState().providerSettings
 
-  // 合并为一个有序列表
   interface ProviderItem {
     type: 'builtin' | 'custom'
     key: string
@@ -22,34 +22,23 @@ export function renderProviderList(): void {
   }
 
   const allItems: ProviderItem[] = []
-  builtIn.forEach(p => {
+  builtIn.forEach((p: { key: string; name: string; url: string; icon: string; color: { dark: string; light: string } }) => {
     const isChecked = enabled === null || enabled.includes(p.key)
     allItems.push({
-      type: 'builtin',
-      key: p.key,
-      name: p.name,
-      url: p.url,
-      icon: p.icon,
-      color: p.color || { dark: '#151517', light: '#ffffff' },
-      checked: isChecked
+      type: 'builtin', key: p.key, name: p.name, url: p.url,
+      icon: p.icon, color: p.color || { dark: '#151517', light: '#ffffff' }, checked: isChecked
     })
   })
-  custom.forEach((p, i) => {
+  custom.forEach((p: { key: string; name: string; url: string; icon: string | null; color?: { dark: string; light: string } }, i: number) => {
     allItems.push({
-      type: 'custom',
-      key: p.key,
-      name: p.name,
-      url: p.url,
-      icon: p.icon || null,
-      color: p.color || { dark: '#1a1e28', light: '#f0f2f5' },
-      index: i,
-      checked: true
+      type: 'custom', key: p.key, name: p.name, url: p.url,
+      icon: p.icon || null, color: p.color || { dark: '#1a1e28', light: '#f0f2f5' },
+      index: i, checked: true
     })
   })
 
-  // 按保存的顺序排序
   if (getState().providerSettings.order) {
-    const orderMap = new Map(getState().providerSettings.order!.map((k, i) => [k, i]))
+    const orderMap = new Map(getState().providerSettings.order!.map((k: string, i: number) => [k, i] as [string, number]))
     allItems.sort((a, b) => (orderMap.get(a.key) ?? 999) - (orderMap.get(b.key) ?? 999))
   }
 
@@ -59,20 +48,13 @@ export function renderProviderList(): void {
     el.draggable = true
     el.dataset.key = item.key
 
-    // 安全转义 HTML 特殊字符
-    const escapeHtml = (str: string): string => {
-      const div = document.createElement('div')
-      div.textContent = str
-      return div.innerHTML
-    }
-
     const iconHtml = item.icon
       ? `<img src="${escapeHtml(item.icon)}" alt="${escapeHtml(item.name)}">`
-      : `<div style="width:28px;height:28px;border-radius:6px;background:var(--surface-3);display:grid;place-items:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">${escapeHtml((item.name || '?')[0].toUpperCase())}</div>`
-    const deleteHtml =
-      item.type === 'custom'
-        ? `<button class="provider-delete" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
-        : ''
+      : `<div class="provider-letter-icon">${escapeHtml((item.name || '?')[0].toUpperCase())}</div>`
+
+    const deleteHtml = item.type === 'custom'
+      ? `<button class="provider-delete" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
+      : ''
 
     el.innerHTML = `
       <div class="drag-handle" title="拖拽排序">
@@ -87,7 +69,6 @@ export function renderProviderList(): void {
       ${deleteHtml}
     `
 
-    // 复选框
     const checkbox = el.querySelector('.provider-checkbox') as HTMLInputElement
     checkbox.addEventListener('change', () => {
       if (item.type === 'builtin') {
@@ -95,18 +76,12 @@ export function renderProviderList(): void {
       }
     })
 
-    // 点击服务商信息打开编辑弹窗
-    const info = el.querySelector('.provider-item-info') as HTMLElement
-    info.addEventListener('click', () => {
-      openEditModal(item)
-    })
-
-    // 删除按钮
     if (item.type === 'custom') {
       const deleteBtn = el.querySelector('.provider-delete') as HTMLElement
       deleteBtn.addEventListener('click', () => {
         el.remove()
-        deleteCustomProvider(item.index!)
+        if (item.index !== undefined) removeCustomProvider(item.index)
+        saveProviderOrderFromDOM()
       })
     }
 
@@ -127,9 +102,7 @@ export function renderProviderList(): void {
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
       if (el !== dragSrcEl) el.classList.add('drag-over')
     })
-    el.addEventListener('dragleave', () => {
-      el.classList.remove('drag-over')
-    })
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'))
     el.addEventListener('drop', e => {
       e.preventDefault()
       el.classList.remove('drag-over')
@@ -137,11 +110,8 @@ export function renderProviderList(): void {
       const items = [...list.children] as HTMLElement[]
       const fromIdx = items.indexOf(dragSrcEl)
       const toIdx = items.indexOf(el)
-      if (fromIdx < toIdx) {
-        list.insertBefore(dragSrcEl, el.nextSibling)
-      } else {
-        list.insertBefore(dragSrcEl, el)
-      }
+      if (fromIdx < toIdx) list.insertBefore(dragSrcEl, el.nextSibling)
+      else list.insertBefore(dragSrcEl, el)
       saveProviderOrderFromDOM()
     })
 
@@ -150,35 +120,28 @@ export function renderProviderList(): void {
 }
 
 export function saveProviderOrderFromDOM(): void {
-  const list = document.getElementById('providerList')
+  const list = byIdOrNull<HTMLDivElement>('providerList')
   if (!list) return
   const order = [...list.children].map(el => (el as HTMLElement).dataset.key!)
   const checked = [...list.querySelectorAll<HTMLInputElement>('.provider-checkbox:checked')].map(
     cb => (cb.closest('.provider-item') as HTMLElement).dataset.key!
   )
   const { providerSettings } = getState()
-  const enabledBuiltIn = providerSettings.builtIn.map(p => p.key).filter(k => checked.includes(k))
+  const enabledBuiltIn = providerSettings.builtIn.map((p: { key: string }) => p.key).filter((k: string) => checked.includes(k))
   window.electronAPI.saveProviderOrder(order)
-  providerSettings.enabled = enabledBuiltIn
+  setEnabledProviders(enabledBuiltIn)
   window.electronAPI.saveProviderSettings({ enabled: enabledBuiltIn, custom: providerSettings.custom })
 }
 
 function toggleBuiltInProvider(key: string, enabled: boolean): void {
   const { providerSettings } = getState()
   let current = providerSettings.enabled
-  if (current === null) {
-    current = providerSettings.builtIn.map(p => p.key)
-  }
+  if (current === null) current = providerSettings.builtIn.map(p => p.key)
   if (enabled) {
     if (!current.includes(key)) current.push(key)
   } else {
     current = current.filter(k => k !== key)
   }
-  providerSettings.enabled = current
-  saveProviderOrderFromDOM()
-}
-
-function deleteCustomProvider(index: number): void {
-  getState().providerSettings.custom.splice(index, 1)
+  setEnabledProviders(current)
   saveProviderOrderFromDOM()
 }
