@@ -2,6 +2,7 @@
 // 支持并发加载计数和最小显示时间
 
 import { byIdOrNull } from '../utils/dom'
+import { MIN_LOADING_MS, STATUS_DURATION_MS } from '../utils/constants'
 
 let loadingOverlay: HTMLElement | null = null
 let loadingText: HTMLElement | null = null
@@ -9,7 +10,6 @@ let statusIndicator: HTMLElement | null = null
 
 let loadingCount = 0
 let loadingStartTime = 0
-const MIN_LOADING_MS = 200
 let hideLoadingTimer: ReturnType<typeof setTimeout> | null = null
 
 export function initLoading(overlay: HTMLElement, text: HTMLElement, status: HTMLElement): void {
@@ -42,7 +42,7 @@ export function hideLoading(): void {
   }, delay)
 }
 
-export function showStatus(text: string, duration = 2000): void {
+export function showStatus(text: string, duration = STATUS_DURATION_MS): void {
   if (!statusIndicator) return
   statusIndicator.textContent = text
   statusIndicator.classList.add('visible')

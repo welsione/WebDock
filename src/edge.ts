@@ -1,3 +1,5 @@
+import { EDGE_CLICK_THRESHOLD_PX } from './utils/constants'
+
 const params = new URLSearchParams(window.location.search)
 document.documentElement.setAttribute('data-theme', params.get('theme') || 'dark')
 
@@ -15,8 +17,8 @@ function endDrag(): void {
   if (!dragging) return
   dragging = false
   document.body.classList.remove('dragging')
-  // 移动 < 3px 视为点击，退出专注模式
-  if (Math.abs(totalDX) < 3 && Math.abs(totalDY) < 3) {
+  // 移动 < 阈值视为点击，退出专注模式
+  if (Math.abs(totalDX) < EDGE_CLICK_THRESHOLD_PX && Math.abs(totalDY) < EDGE_CLICK_THRESHOLD_PX) {
     window.edgeAPI.exitFocus()
   }
 }

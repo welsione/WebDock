@@ -6,6 +6,7 @@ import { initLoading, showLoading, hideLoading, showStatus } from './ui/loading'
 import { initNav, renderNav, setupLoadingListener, setupProviderUpdateListener } from './ui/nav'
 import { setupShortcutRecording } from './ui/shortcuts'
 import { initUpdateBanner, setupUpdateStatusListener } from './ui/update-banner'
+import { FOCUS_NOTIFY_DELAY_MS, RELOAD_COOLDOWN_MS } from './utils/constants'
 import { byIdOrNull } from './utils/dom'
 
 // ===== Initialize UI modules =====
@@ -45,7 +46,7 @@ function toggleFocus(): void {
   syncFocusUI(!focusMode)
   setTimeout(() => {
     window.electronAPI.notifySidebarState(focusMode)
-  }, 250)
+  }, FOCUS_NOTIFY_DELAY_MS)
 }
 
 // ===== Action Buttons =====
@@ -55,7 +56,7 @@ byIdOrNull<HTMLButtonElement>('reloadFrame')?.addEventListener('click', () => {
   reloadCooldown = true
   window.electronAPI.reload()
   showStatus('已重载')
-  setTimeout(() => { reloadCooldown = false }, 1000)
+  setTimeout(() => { reloadCooldown = false }, RELOAD_COOLDOWN_MS)
 })
 
 byIdOrNull<HTMLButtonElement>('pasteClipboard')?.addEventListener('click', async () => {
