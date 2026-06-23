@@ -5,7 +5,6 @@ import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import log from 'electron-log'
-import { PROVIDERS } from './config'
 
 // ===== Types =====
 export interface CustomProvider {
@@ -29,18 +28,20 @@ export interface Settings {
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
-// ===== 读取设置 =====
-export function loadSettings(): Settings | null {
+// ===== 异步读取设置 =====
+export async function loadSettings(): Promise<Settings | null> {
   try {
-    if (fs.existsSync(SETTINGS_PATH)) {
-      return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'))
-    }
+    await fs.promises.access(SETTINGS_PATH)
+    const content = await fs.promises.readFile(SETTINGS_PATH, 'utf-8')
+    return JSON.parse(content)
   } catch (e) {
+    // 文件不存在时返回 null（正常情况）
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
     log.error('Failed to load settings:', e)
     // 备份损坏的设置文件
     try {
       const backupPath = SETTINGS_PATH.replace('.json', '.bak.json')
-      fs.renameSync(SETTINGS_PATH, backupPath)
+      await fs.promises.rename(SETTINGS_PATH, backupPath)
       log.info(`Corrupted settings backed up to ${backupPath}`)
     } catch (backupErr) {
       log.error('Failed to backup corrupted settings:', backupErr)
@@ -49,8 +50,8 @@ export function loadSettings(): Settings | null {
   return null
 }
 
-// ===== 保存设置 =====
-export function saveSettings(data: {
+// ===== 异步保存设置 =====
+export async function saveSettings(data: {
   shortcut: string
   switchShortcut: string
   mode: string
@@ -59,9 +60,9 @@ export function saveSettings(data: {
   providerOrder: string[] | null
   windowBounds: { x: number; y: number; width: number; height: number } | null
   builtInColors: Record<string, { dark: string; light: string }>
-}): void {
+}): Promise<void> {
   try {
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(data))
+    await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(data))
   } catch (e) {
     log.error('Failed to save settings:', e)
   }

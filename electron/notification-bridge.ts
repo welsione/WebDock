@@ -6,20 +6,21 @@ import log from 'electron-log'
 import { dataUrlToNativeImage, writeIconToTempFile } from './icons'
 
 // ===== 原生通知 =====
-export function showNativeNotification(
+export async function showNativeNotification(
   title: string,
   body: string,
   iconDataUrl?: string,
   providerKey?: string,
   onSwitchProvider?: (key: string) => void,
   onShowMainWindow?: () => void
-): void {
+): Promise<void> {
   if (!Notification.isSupported()) return
   const options: Electron.NotificationConstructorOptions = { title, body }
   if (iconDataUrl) {
     const img = dataUrlToNativeImage(iconDataUrl)
     if (img) {
-      options.icon = process.platform === 'darwin' ? writeIconToTempFile(img) ?? img : img
+      const tmpPath = await writeIconToTempFile(img)
+      options.icon = process.platform === 'darwin' ? tmpPath ?? img : img
     }
   }
   const n = new Notification(options)

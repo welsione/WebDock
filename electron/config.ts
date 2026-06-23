@@ -8,10 +8,17 @@ const iconBaseDir = app.isPackaged
   : path.join(__dirname, '..', '..', 'assets')
 
 function loadIcon(name: string): string {
-  const ext = path.extname(name).toLowerCase()
-  const mimeMap: Record<string, string> = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
-  const mime = mimeMap[ext] || 'image/png'
-  return `data:${mime};base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
+  try {
+    const ext = path.extname(name).toLowerCase()
+    const mimeMap: Record<string, string> = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
+    const mime = mimeMap[ext] || 'image/png'
+    return `data:${mime};base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
+  } catch (e) {
+    // 图标文件缺失时用首字母 SVG 回退
+    const letter = path.basename(name, path.extname(name)).charAt(0).toUpperCase() || '?'
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#5eead4"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+  }
 }
 
 // ===== Providers =====
@@ -65,6 +72,7 @@ const ICON_FETCH_TIMEOUT_MS = 3000      // 图标获取超时
 const HTML_ICONS_TIMEOUT_MS = 5000      // HTML 解析图标超时
 const BOUNDS_SAVE_DELAY_MS = 500        // 窗口位置保存延迟
 const RESIZE_UPDATE_DELAY_MS = 16       // 窗口大小更新延迟（约 60fps）
+const NOTIFY_ICON_CLEANUP_MS = 60000    // 通知图标清理阈值（1 分钟）
 
 // ===== Theme Scripts =====
 const THEME_BG: Record<string, string> = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
@@ -151,7 +159,8 @@ export {
   ICON_FETCH_TIMEOUT_MS,
   HTML_ICONS_TIMEOUT_MS,
   BOUNDS_SAVE_DELAY_MS,
-  RESIZE_UPDATE_DELAY_MS
+  RESIZE_UPDATE_DELAY_MS,
+  NOTIFY_ICON_CLEANUP_MS
 }
 
 export type { Provider, ProviderColor, KeyEvent }

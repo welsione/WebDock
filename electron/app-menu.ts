@@ -30,6 +30,7 @@ export function buildMenu(): void {
         {
           label: '打开主窗口 DevTools',
           click: () => {
+            const { getMainWindowRef } = require('./window-manager') as typeof import('./window-manager')
             const w = getMainWindowRef()
             if (w && !w.isDestroyed()) w.webContents.openDevTools({ mode: 'detach' })
           }
@@ -40,7 +41,7 @@ export function buildMenu(): void {
           click: () => {
             const p = getMergedProviders().find(x => x.key === getCurrentProviderKey())
             if (p) {
-              showNativeNotification(
+              void showNativeNotification(
                 `${p.name} — 测试通知`, '来自 MineAI 的测试消息',
                 p.icon, p.key, switchProvider, showMainWindow
               )
