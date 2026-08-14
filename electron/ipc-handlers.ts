@@ -26,11 +26,9 @@ import {
   updateBrowserViewBounds
 } from './browser-view-manager'
 import {
-  setMode as setWinMode,
   destroyEdgeWindow,
   getActiveWin as getActiveWinFromMgr,
   getMainWindowRef,
-  getPopupWindowRef,
   setWindowButtonVisibility,
   sendEdgeThemeChange
 } from './window-manager'
@@ -42,21 +40,26 @@ import {
 } from './shortcut-manager'
 import { checkUpdate, downloadUpdate, installUpdate } from './auto-updater'
 import { notifyRenderer } from './notification-bridge'
+import {
+  sanitizeEnabled, sanitizeCustomProviders, sanitizeOrder,
+  sanitizeBuiltInColors, sanitizeTheme, sanitizeProviderKey,
+  sanitizeBoolean, sanitizeNumber
+} from './ipc-validation'
 
 // ===== 模块状态 =====
-let mode: string = MODE.WINDOW
+// MENUBAR 模式已下线，mode 恒为 WINDOW（保留字段兼容旧设置文件）
+const mode: string = MODE.WINDOW
 let initialProviderLoaded = false
 
 // ===== 辅助函数 =====
 function getActiveWin() {
-  return getActiveWinFromMgr(mode)
+  return getActiveWinFromMgr()
 }
 
 function saveAllSettings(): void {
   saveSettings({
     shortcut: getCurrentShortcut(),
     switchShortcut: getSwitchShortcutValue(),
-    mode,
     enabledProviders: getEnabledProviders(),
     customProviders: getCustomProvidersList(),
     providerOrder: getProviderOrderList(),
@@ -70,17 +73,12 @@ function getSwitchShortcutValue(): string { return switchShortcutValue }
 // ===== 注册所有 IPC 通道 =====
 export function setupIPC(): void {
   ipcMain.on('switch-provider', (_event, key: string) => {
-    switchProvider(key)
+    const validKey = sanitizeProviderKey(key)
+    if (validKey) switchProvider(validKey)
   })
 
   ipcMain.on('reload', () => {
     reloadCurrentProvider()
-  })
-
-  ipcMain.handle('toggle-mode', () => {
-    mode = mode === MODE.WINDOW ? MODE.MENUBAR : MODE.WINDOW
-    setWinMode(mode)
-    return mode
   })
 
   ipcMain.handle('get-mode', () => mode)
@@ -97,8 +95,13 @@ export function setupIPC(): void {
   }))
 
   ipcMain.handle('save-provider-settings', (_event, settings: { enabled: string[] | null; custom: CustomProvider[]; builtInColors?: Record<string, { dark: string; light: string }> }) => {
+    // IPC 输入不可信：enabled/custom/colors 逐一清洗，防止 undefined 崩溃与非法数据污染状态
+    const enabled = sanitizeEnabled(settings?.enabled)
+    const custom = sanitizeCustomProviders(settings?.custom)
+    const builtInColors = sanitizeBuiltInColors(settings?.builtInColors)
+
     const oldCustomKeys = new Set(getCustomProvidersList().map(p => p.key))
-    const newCustomKeys = new Set((settings.custom || []).map(p => p.key))
+    const newCustomKeys = new Set(custom.map(p => p.key))
     for (const key of oldCustomKeys) {
       if (!newCustomKeys.has(key)) {
         destroyBrowserView(key)
@@ -106,33 +109,35 @@ export function setupIPC(): void {
     }
 
     const oldEnabled = getEnabledProviders() === null ? PROVIDERS.map(p => p.key) : getEnabledProviders()!
-    const newEnabled = settings.enabled === null ? PROVIDERS.map(p => p.key) : settings.enabled
+    const newEnabled = enabled === null ? PROVIDERS.map(p => p.key) : enabled
     for (const key of oldEnabled) {
       if (!newEnabled.includes(key)) {
         destroyBrowserView(key)
       }
     }
 
-    setEnabledProviders(settings.enabled)
-    setCustomProviders(settings.custom || [])
-    if (settings.builtInColors) {
-      setBuiltInColors(settings.builtInColors)
+    setEnabledProviders(enabled)
+    setCustomProviders(custom)
+    if (builtInColors) {
+      setBuiltInColors(builtInColors)
     }
     saveAllSettings()
-    notifyRenderer(getMainWindowRef(), getPopupWindowRef(), 'providers-updated', getMergedProviders() as unknown as Record<string, unknown>)
+    notifyRenderer(getMainWindowRef(), 'providers-updated', getMergedProviders() as unknown as Record<string, unknown>)
   })
 
   ipcMain.handle('save-provider-order', (_event, order: string[]) => {
-    setProviderOrder(order)
+    setProviderOrder(sanitizeOrder(order))
     saveAllSettings()
-    notifyRenderer(getMainWindowRef(), getPopupWindowRef(), 'providers-updated', getMergedProviders() as unknown as Record<string, unknown>)
+    notifyRenderer(getMainWindowRef(), 'providers-updated', getMergedProviders() as unknown as Record<string, unknown>)
   })
 
   ipcMain.on('sidebar-state', (_event, collapsed: boolean) => {
-    setSidebarCollapsed(collapsed)
+    const valid = sanitizeBoolean(collapsed)
+    if (valid === null) return
+    setSidebarCollapsed(valid)
     const win = getActiveWin()
     if (win && !win.isDestroyed()) {
-      win.setWindowButtonVisibility(!collapsed)
+      win.setWindowButtonVisibility(!valid)
     }
     updateBrowserViewBounds()
   })
@@ -142,7 +147,7 @@ export function setupIPC(): void {
     setWindowButtonVisibility(true)
     destroyEdgeWindow()
     updateBrowserViewBounds()
-    notifyRenderer(getMainWindowRef(), getPopupWindowRef(), 'exit-focus-mode', {})
+    notifyRenderer(getMainWindowRef(), 'exit-focus-mode', {})
   })
 
   ipcMain.on('toggle-settings', (_event, show: boolean) => {
@@ -159,6 +164,7 @@ export function setupIPC(): void {
 
   ipcMain.handle('get-shortcut', () => getCurrentShortcut())
   ipcMain.handle('set-shortcut', (_event, acc: string) => {
+    if (typeof acc !== 'string') return { ok: false, error: '快捷键格式不正确' }
     const result = registerGlobalShortcut(acc)
     if (result.ok) {
       setCurrentShortcut(acc)
@@ -169,6 +175,7 @@ export function setupIPC(): void {
 
   ipcMain.handle('get-switch-shortcut', () => switchShortcutValue)
   ipcMain.handle('set-switch-shortcut', (_event, acc: string) => {
+    if (typeof acc !== 'string') return { ok: false, error: '快捷键格式不正确' }
     if (acc && acc === getCurrentShortcut()) {
       return { ok: false, error: '与全局快捷键冲突，请选择其他组合' }
     }
@@ -194,16 +201,22 @@ export function setupIPC(): void {
   })
 
   ipcMain.on('move-window', (_event, dx: number, dy: number) => {
+    const validDx = sanitizeNumber(dx)
+    const validDy = sanitizeNumber(dy)
+    if (validDx === null || validDy === null) return
     const win = getActiveWin()
     if (!win) return
     const [x, y] = win.getPosition()
-    win.setPosition(x + dx, y + dy)
+    win.setPosition(x + validDx, y + validDy)
   })
 
   ipcMain.on('theme-changed', (_event, theme: string) => {
-    nativeTheme.themeSource = theme as typeof nativeTheme.themeSource
-    sendEdgeThemeChange(theme)
-    const shouldSwitch = handleThemeChange(theme, initialProviderLoaded)
+    // 白名单校验：THEME_SCRIPTS 仅含 dark/light，任意字符串会导致 executeJavaScript(undefined) 崩溃
+    const validTheme = sanitizeTheme(theme)
+    if (!validTheme) return
+    nativeTheme.themeSource = validTheme
+    sendEdgeThemeChange(validTheme)
+    const shouldSwitch = handleThemeChange(validTheme, initialProviderLoaded)
     if (shouldSwitch) {
       initialProviderLoaded = true
     }
@@ -229,9 +242,8 @@ export function setupIPC(): void {
   })
 }
 
-// ===== 获取 mode =====
+// ===== 获取 mode（恒为 window，MENUBAR 已下线） =====
 export function getMode(): string { return mode }
-export function setModeValue(m: string): void { mode = m }
 export function getSwitchShortcut(): string { return switchShortcutValue }
 export function setSwitchShortcutVal(v: string): void {
   switchShortcutValue = v
