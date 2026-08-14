@@ -16,9 +16,35 @@ const state: AppState = {
   switchShortcut: 'Shift+Tab'
 }
 
-/** 返回状态的只读快照（浅冻结） */
+function deepFreeze<T>(obj: T): T {
+  if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
+    Object.freeze(obj)
+    for (const key of Object.keys(obj as object)) {
+      deepFreeze((obj as Record<string, unknown>)[key])
+    }
+  }
+  return obj
+}
+
+/**
+ * 返回状态的只读快照（副本隔离）：
+ * - 每次调用创建新对象并深冻结，调用方 mutate（push/set/赋值）会在严格模式下抛错
+ * - Map/Set 无法通过 Object.freeze 防写，因此 providerStatus 返回副本，mutate 副本不影响内部状态
+ * - setter 通过替换引用更新内部状态，与快照互不干扰
+ */
 export function getState(): Readonly<AppState> {
-  return state
+  return deepFreeze({
+    providers: state.providers,
+    currentProviderKey: state.currentProviderKey,
+    providerStatus: new Map(state.providerStatus),
+    providerSettings: {
+      builtIn: [...state.providerSettings.builtIn],
+      enabled: state.providerSettings.enabled ? [...state.providerSettings.enabled] : null,
+      custom: [...state.providerSettings.custom],
+      order: state.providerSettings.order ? [...state.providerSettings.order] : null
+    },
+    switchShortcut: state.switchShortcut
+  })
 }
 
 export function setCurrentProvider(key: string): void {
@@ -36,6 +62,17 @@ export function updateProviderSettings(settings: ProviderSettings): void {
 
 export function setSwitchShortcut(shortcut: string): void {
   state.switchShortcut = shortcut
+}
+
+/** 更新服务商加载状态（替换 Map 引用，避免 mutate 冻结对象） */
+export function setProviderStatus(key: string, status: 'loading' | 'error' | 'loaded'): void {
+  const next = new Map(state.providerStatus)
+  if (status === 'loaded') {
+    next.delete(key)
+  } else {
+    next.set(key, status)
+  }
+  state.providerStatus = next
 }
 
 /** 添加自定义服务商（通过 setter 而非直接 push） */

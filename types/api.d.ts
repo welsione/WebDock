@@ -32,7 +32,7 @@ interface ElectronAPI {
   getProviderSettings: () => Promise<ProviderSettings>
   saveProviderSettings: (settings: {
     enabled: string[] | null
-    custom: ProviderInfo[]
+    custom: Array<{ key: string; name: string; url: string; icon: string | null; color?: { dark: string; light: string } }>
     builtInColors?: Record<string, { dark: string; light: string }>
   }) => Promise<void>
   saveProviderOrder: (order: string[]) => Promise<void>

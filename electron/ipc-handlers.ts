@@ -23,23 +23,16 @@ import {
   injectClipboard,
   handleThemeChange,
   getCurrentView,
-  getViewsMap,
   updateBrowserViewBounds
 } from './browser-view-manager'
 import {
-  createMainWindow,
-  createPopupWindow,
-  showMainWindow,
-  togglePopup,
   setMode as setWinMode,
   destroyEdgeWindow,
-  createEdgeWindow,
   getActiveWin as getActiveWinFromMgr,
   getMainWindowRef,
   getPopupWindowRef,
   setWindowButtonVisibility,
-  sendEdgeThemeChange,
-  setSavedBounds
+  sendEdgeThemeChange
 } from './window-manager'
 import { saveSettings, type CustomProvider } from './settings-store'
 import {
@@ -48,7 +41,7 @@ import {
   registerGlobalShortcut
 } from './shortcut-manager'
 import { checkUpdate, downloadUpdate, installUpdate } from './auto-updater'
-import { showNativeNotification, notifyRenderer } from './notification-bridge'
+import { notifyRenderer } from './notification-bridge'
 
 // ===== 模块状态 =====
 let mode: string = MODE.WINDOW
@@ -67,14 +60,12 @@ function saveAllSettings(): void {
     enabledProviders: getEnabledProviders(),
     customProviders: getCustomProvidersList(),
     providerOrder: getProviderOrderList(),
-    windowBounds: null, // 由 window-manager 管理
     builtInColors: getBuiltInColors()
   })
 }
 
 let switchShortcutValue = 'Shift+Tab'
 function getSwitchShortcutValue(): string { return switchShortcutValue }
-function setSwitchShortcutValue(v: string): void { switchShortcutValue = v }
 
 // ===== 注册所有 IPC 通道 =====
 export function setupIPC(): void {
@@ -246,5 +237,3 @@ export function setSwitchShortcutVal(v: string): void {
   switchShortcutValue = v
   setViewSwitchShortcut(v)
 }
-export function isInitialProviderLoaded(): boolean { return initialProviderLoaded }
-export function setInitialProviderLoaded(v: boolean): void { initialProviderLoaded = v }

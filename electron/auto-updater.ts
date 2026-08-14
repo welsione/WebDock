@@ -5,10 +5,8 @@ import { BrowserWindow } from 'electron'
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
 import log from 'electron-log'
 import { notifyRenderer } from './notification-bridge'
-import { APP_ICON } from './icons'
 import { UPDATE_CHECK_DELAY_MS } from './config'
 
-let updateInfo: UpdateInfo | null = null
 let mainWindow: BrowserWindow | null = null
 let popupWindow: BrowserWindow | null = null
 
@@ -18,18 +16,12 @@ export function setUpdateWindows(main: BrowserWindow | null, popup: BrowserWindo
   popupWindow = popup
 }
 
-// ===== 获取更新信息 =====
-export function getUpdateInfo(): UpdateInfo | null {
-  return updateInfo
-}
-
 // ===== 初始化自动更新 =====
 export function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info: UpdateInfo) => {
-    updateInfo = info
     notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'available', version: info.version })
   })
 

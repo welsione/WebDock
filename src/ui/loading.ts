@@ -1,7 +1,6 @@
 // ===== 加载状态管理 =====
 // 支持并发加载计数和最小显示时间
 
-import { byIdOrNull } from '../utils/dom'
 import { MIN_LOADING_MS, STATUS_DURATION_MS } from '../utils/constants'
 
 let loadingOverlay: HTMLElement | null = null

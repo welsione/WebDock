@@ -1,7 +1,7 @@
 // ===== 窗口管理模块 =====
 // 负责主窗口、弹窗、边缘条窗口的创建、销毁和位置管理
 
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, screen, app } from 'electron'
 import path from 'path'
 import log from 'electron-log'
 import { POPUP_WIDTH, POPUP_HEIGHT, EDGE_PILL_WIDTH, EDGE_PILL_HEIGHT, RESIZE_UPDATE_DELAY_MS, BOUNDS_SAVE_DELAY_MS, MODE } from './config'
@@ -54,7 +54,6 @@ export function getSavedBoundsValue(): { x: number; y: number; width: number; he
 // ===== 窗口引用 =====
 export function getMainWindowRef(): BrowserWindow | null { return mainWindow }
 export function getPopupWindowRef(): BrowserWindow | null { return popupWindow }
-export function getEdgeWindowRef(): BrowserWindow | null { return edgeWindow }
 
 // ===== 获取活跃窗口 =====
 export function getActiveWin(mode: string): BrowserWindow | null {
@@ -106,7 +105,7 @@ export function createMainWindow(mode: string): void {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
-  if (!require('electron').app.isPackaged) {
+  if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
 

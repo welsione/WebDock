@@ -1,5 +1,4 @@
-import { getState, setCurrentProvider } from '../state'
-import { byIdOrNull } from '../utils/dom'
+import { getState, setCurrentProvider, setProviderStatus, updateProviders } from '../state'
 
 let navContainer: HTMLElement | null = null
 
@@ -50,22 +49,14 @@ export function renderNav(providerStatus: Map<string, 'loading' | 'error'>): voi
 export function setupLoadingListener(): void {
   window.electronAPI.onLoading(data => {
     const { provider, status } = data as { provider: string; status: 'loading' | 'loaded' | 'error' }
-    const providerStatus = getState().providerStatus
-    if (status === 'loading') {
-      providerStatus.set(provider, 'loading')
-    } else if (status === 'error') {
-      providerStatus.set(provider, 'error')
-    } else {
-      providerStatus.delete(provider)
-    }
-    renderNav(providerStatus)
+    setProviderStatus(provider, status)
+    renderNav(getState().providerStatus)
   })
 }
 
 export function setupProviderUpdateListener(): void {
   window.electronAPI.onProvidersUpdated(providers => {
-    const { updateProviders } = require('../state') as typeof import('../state')
-    updateProviders(providers as ProviderInfo[])
+    updateProviders(providers)
     renderNav(getState().providerStatus)
   })
 }

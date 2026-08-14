@@ -1,8 +1,9 @@
 import './style.css'
 import { getState, setCurrentProvider, updateProviders, updateProviderSettings, setSwitchShortcut } from './state'
+import { renderProviderList, saveProviderOrderFromDOM } from './providers/manager'
 import { initToast, toast } from './ui/toast'
 import { Theme } from './ui/theme'
-import { initLoading, showLoading, hideLoading, showStatus } from './ui/loading'
+import { initLoading, hideLoading, showStatus } from './ui/loading'
 import { initNav, renderNav, setupLoadingListener, setupProviderUpdateListener } from './ui/nav'
 import { setupShortcutRecording } from './ui/shortcuts'
 import { initUpdateBanner, setupUpdateStatusListener } from './ui/update-banner'
@@ -171,9 +172,7 @@ document.addEventListener('settings-refresh-providers', () => {
 
 document.addEventListener('provider-settings-changed', () => {
   // 通知 manager 重新渲染
-  const { renderProviderList } = require('./providers/manager') as typeof import('./providers/manager')
   renderProviderList()
-  const { saveProviderOrderFromDOM } = require('./providers/manager') as typeof import('./providers/manager')
   saveProviderOrderFromDOM()
 })
 
@@ -200,9 +199,7 @@ window.electronAPI.onExitFocusMode(() => syncFocusUI(false))
 
 // ===== Init =====
 async function init(): Promise<void> {
-  const state = getState()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(state as any).providers = await window.electronAPI.getProviders()
+  updateProviders(await window.electronAPI.getProviders())
   setCurrentProvider(await window.electronAPI.getCurrentProvider())
   const mode = await window.electronAPI.getMode()
   document.body.dataset.mode = mode
@@ -211,7 +208,7 @@ async function init(): Promise<void> {
   const verEl = byIdOrNull<HTMLElement>('appVersion')
   if (verEl) verEl.textContent = `v${version}`
 
-  renderNav(state.providerStatus)
+  renderNav(getState().providerStatus)
   Theme.apply()
   Theme.listenSystemTheme()
   const ss = await window.electronAPI.getSwitchShortcut()

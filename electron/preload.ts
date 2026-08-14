@@ -5,8 +5,10 @@ export interface ProvidersUpdatedCallback {
 }
 
 export interface LoadingCallback {
-  (data: { provider: string; status: string; error?: string }): void
+  (data: LoadingData): void
 }
+
+export type LoadingData = { provider: string; status: string; error?: string }
 
 export interface VoidCallback {
   (): void
@@ -21,8 +23,10 @@ export interface ModeCallback {
 }
 
 export interface UpdateStatusCallback {
-  (data: { status: string; version?: string; percent?: number; error?: string }): void
+  (data: UpdateStatusData): void
 }
+
+export type UpdateStatusData = { status: string; version?: string; percent?: number; error?: string }
 
 // 内置服务商信息（icon 和 color 必填）
 export interface ProviderInfo {
@@ -58,7 +62,7 @@ export interface ElectronAPI {
   getCurrentProvider: () => Promise<string>
   getProviders: () => Promise<ProviderInfo[]>
   getProviderSettings: () => Promise<ProviderSettings>
-  saveProviderSettings: (settings: { enabled: string[] | null; custom: ProviderInfo[]; builtInColors?: Record<string, { dark: string; light: string }> }) => Promise<void>
+  saveProviderSettings: (settings: { enabled: string[] | null; custom: CustomProviderInfo[]; builtInColors?: Record<string, { dark: string; light: string }> }) => Promise<void>
   saveProviderOrder: (order: string[]) => Promise<void>
   onProvidersUpdated: (callback: ProvidersUpdatedCallback) => void
   onLoading: (callback: LoadingCallback) => void
@@ -83,9 +87,10 @@ export interface ElectronAPI {
 }
 
 // 单次监听辅助：先移除旧 listener 再注册新的，防止累积
-function onceOn(channel: string, callback: (...args: unknown[]) => void): void {
+// 泛型 T 为通道负载类型，保证回调参数类型安全
+function onceOn<T>(channel: string, callback: (payload: T) => void): void {
   ipcRenderer.removeAllListeners(channel)
-  ipcRenderer.on(channel, (_event, ...args: unknown[]) => callback(...args))
+  ipcRenderer.on(channel, (_event, payload: T) => callback(payload))
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -99,14 +104,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProviderSettings: () => ipcRenderer.invoke('get-provider-settings'),
   saveProviderSettings: (settings) => ipcRenderer.invoke('save-provider-settings', settings),
   saveProviderOrder: (order) => ipcRenderer.invoke('save-provider-order', order),
-  onProvidersUpdated: (callback) => onceOn('providers-updated', (providers) => callback(providers)),
-  onLoading: (callback) => onceOn('loading', (data) => callback(data)),
-  onSidebarColor: (callback) => onceOn('sidebar-color', (color) => callback(color)),
-  onModeChange: (callback) => onceOn('mode-changed', (mode) => callback(mode)),
-  onCurrentProviderChanged: (callback) => onceOn('current-provider-changed', (key) => callback(key)),
+  onProvidersUpdated: (callback) => onceOn<ProviderInfo[]>('providers-updated', callback),
+  onLoading: (callback) => onceOn<LoadingData>('loading', callback),
+  onSidebarColor: (callback) => onceOn<string>('sidebar-color', callback),
+  onModeChange: (callback) => onceOn<string>('mode-changed', callback),
+  onCurrentProviderChanged: (callback) => onceOn<string>('current-provider-changed', callback),
   notifySidebarState: (collapsed: boolean) => ipcRenderer.send('sidebar-state', collapsed),
   notifyThemeChange: (theme: string) => ipcRenderer.send('theme-changed', theme),
-  onExitFocusMode: (callback) => onceOn('exit-focus-mode', () => callback()),
+  onExitFocusMode: (callback) => onceOn<void>('exit-focus-mode', callback),
   getShortcut: () => ipcRenderer.invoke('get-shortcut'),
   setShortcut: (acc: string) => ipcRenderer.invoke('set-shortcut', acc),
   getSwitchShortcut: () => ipcRenderer.invoke('get-switch-shortcut'),
@@ -118,5 +123,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  onUpdateStatus: (callback) => onceOn('update-status', (data) => callback(data))
+  onUpdateStatus: (callback) => onceOn<UpdateStatusData>('update-status', callback)
 } satisfies ElectronAPI)

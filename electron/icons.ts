@@ -6,34 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
 import log from 'electron-log'
-import { PROVIDERS, NOTIFY_ICON_CLEANUP_MS } from './config'
-
-// ===== 懒加载应用图标 =====
-let _appIcon: Buffer | null = null
-
-export function getAppIcon(): Buffer {
-  if (!_appIcon) {
-    const iconPath = path.join(process.resourcesPath, 'assets', 'icon.png')
-    try {
-      _appIcon = fs.readFileSync(iconPath)
-    } catch (e) {
-      log.error('Failed to read app icon:', e)
-      // 回退到 1x1 透明 PNG
-      _appIcon = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
-    }
-  }
-  return _appIcon
-}
-
-// 兼容旧代码的同步属性
-export const APP_ICON = new Proxy({} as Buffer, {
-  get(_target, prop) {
-    const icon = getAppIcon()
-    const value = Reflect.get(icon, prop)
-    if (typeof value === 'function') return value.bind(icon)
-    return value
-  }
-})
+import { NOTIFY_ICON_CLEANUP_MS } from './config'
 
 // ===== 从 data URL 解析 NativeImage =====
 export function dataUrlToNativeImage(dataUrl: string): Electron.NativeImage | null {
@@ -57,8 +30,10 @@ export function generateLetterIcon(name: string): string {
       <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle"
         fill="white" font-size="24" font-family="system-ui, sans-serif" font-weight="600">${letter}</text>
     </svg>`
-  const img = nativeImage.createFromBuffer(Buffer.from(canvas))
-  return img.toDataURL()
+  // 直接返回 SVG data URL（<img> 可直接渲染）。
+  // 注意：不能用 nativeImage.createFromBuffer 处理 SVG buffer——Electron 仅支持 PNG/JPEG，
+  // 对 SVG 会得到空图像，toDataURL() 返回无效的空 data URL
+  return `data:image/svg+xml;base64,${Buffer.from(canvas).toString('base64')}`
 }
 
 // ===== 异步写入临时图标文件 =====
@@ -118,17 +93,5 @@ export async function fetchIconByUrl(iconUrl: string): Promise<string | null> {
     return img.isEmpty() ? null : img.toDataURL()
   } catch {
     return null
-  }
-}
-
-// ===== 从路径加载图标（同步，用于内置 Provider 初始化） =====
-export function loadIcon(iconPath: string): string {
-  try {
-    const resolved = path.join(process.resourcesPath, 'assets', iconPath)
-    const buffer = fs.readFileSync(resolved)
-    return nativeImage.createFromBuffer(buffer).toDataURL()
-  } catch (e) {
-    log.error('Failed to load icon:', iconPath, e)
-    return ''
   }
 }

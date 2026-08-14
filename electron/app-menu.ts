@@ -2,8 +2,8 @@
 // 负责构建 macOS 应用菜单
 
 import { app, Menu } from 'electron'
-import { getMergedProviders, getCurrentProviderKey, switchProvider } from './browser-view-manager'
-import { showMainWindow } from './window-manager'
+import { getMergedProviders, getCurrentProviderKey, switchProvider, getCurrentView } from './browser-view-manager'
+import { showMainWindow, getMainWindowRef } from './window-manager'
 import { showNativeNotification } from './notification-bridge'
 
 export function buildMenu(): void {
@@ -22,7 +22,6 @@ export function buildMenu(): void {
           label: '打开 BrowserView DevTools',
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => {
-            const { getCurrentView } = require('./browser-view-manager') as typeof import('./browser-view-manager')
             const v = getCurrentView()
             if (v?.webContents && !v.webContents.isDestroyed()) v.webContents.openDevTools({ mode: 'detach' })
           }
@@ -30,7 +29,6 @@ export function buildMenu(): void {
         {
           label: '打开主窗口 DevTools',
           click: () => {
-            const { getMainWindowRef } = require('./window-manager') as typeof import('./window-manager')
             const w = getMainWindowRef()
             if (w && !w.isDestroyed()) w.webContents.openDevTools({ mode: 'detach' })
           }

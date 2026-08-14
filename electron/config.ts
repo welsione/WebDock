@@ -13,7 +13,7 @@ function loadIcon(name: string): string {
     const mimeMap: Record<string, string> = { '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg' }
     const mime = mimeMap[ext] || 'image/png'
     return `data:${mime};base64,${fs.readFileSync(path.join(iconBaseDir, name)).toString('base64')}`
-  } catch (e) {
+  } catch {
     // 图标文件缺失时用首字母 SVG 回退
     const letter = path.basename(name, path.extname(name)).charAt(0).toUpperCase() || '?'
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#5eead4"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
@@ -48,15 +48,8 @@ const PROVIDERS: Provider[] = [
 // 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载
 const NEEDS_THEME_RELOAD = new Set(['doubao', 'metaso', 'minimax'])
 
-// 各服务商聊天输入框选择器（用于剪贴板注入，未列出的使用默认选择器）
-const CHAT_INPUT_SELECTORS: Record<string, string> = {
-  // 当前所有服务商都使用默认选择器，如需特殊处理在此覆盖
-  // deepseek: 'textarea.ChatInput...',
-}
-
 // ===== Constants =====
 const MODE = { WINDOW: 'window', MENUBAR: 'menubar' } as const
-const THEME = { DARK: 'dark', LIGHT: 'light' } as const
 const SIDEBAR_WIDTH = 74
 const EDGE_WIDTH = 0
 const EDGE_PILL_WIDTH = 16
@@ -75,8 +68,6 @@ const RESIZE_UPDATE_DELAY_MS = 16       // 窗口大小更新延迟（约 60fps�
 const NOTIFY_ICON_CLEANUP_MS = 60000    // 通知图标清理阈值（1 分钟）
 
 // ===== Theme Scripts =====
-const THEME_BG: Record<string, string> = { [THEME.DARK]: '#0d0f14', [THEME.LIGHT]: '#ffffff' }
-
 const THEME_KEYS = JSON.stringify(['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'])
 
 function buildThemeScript(t: string): string {
@@ -84,8 +75,8 @@ function buildThemeScript(t: string): string {
 }
 
 const THEME_SCRIPTS: Record<string, string> = {
-  [THEME.DARK]: buildThemeScript('dark'),
-  [THEME.LIGHT]: buildThemeScript('light')
+  dark: buildThemeScript('dark'),
+  light: buildThemeScript('light')
 }
 
 // ===== Notification Bridge =====
@@ -139,16 +130,13 @@ export {
   PROVIDERS,
   NEEDS_THEME_RELOAD,
   MODE,
-  THEME,
   SIDEBAR_WIDTH,
   EDGE_WIDTH,
   EDGE_PILL_WIDTH,
   EDGE_PILL_HEIGHT,
   POPUP_WIDTH,
   POPUP_HEIGHT,
-  THEME_BG,
   THEME_SCRIPTS,
-  CHAT_INPUT_SELECTORS,
   buildNotifyBridge,
   parseShortcut,
   matchesKeyEvent,

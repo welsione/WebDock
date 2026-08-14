@@ -8,15 +8,11 @@ import {
   NEEDS_THEME_RELOAD,
   SIDEBAR_WIDTH,
   EDGE_WIDTH,
-  EDGE_PILL_WIDTH,
-  EDGE_PILL_HEIGHT,
   THEME_SCRIPTS,
   buildNotifyBridge,
-  CHAT_INPUT_SELECTORS,
   matchesKeyEvent,
   THEME_RELOAD_DELAY_MS,
   THEME_INJECT_DELAY_MS,
-  RESIZE_UPDATE_DELAY_MS,
   type Provider
 } from './config'
 import { generateLetterIcon } from './icons'
@@ -38,7 +34,6 @@ let sidebarCollapsed = false
 let getMainWindow: () => BrowserWindow | null = () => null
 let getPopupWindow: () => BrowserWindow | null = () => null
 let getActiveWin: () => BrowserWindow | null = () => null
-let getMode: () => string = () => 'window'
 let onProviderSwitched: ((key: string) => void) | null = null
 let createEdgeWindowFn: ((win: BrowserWindow) => void) | null = null
 let destroyEdgeWindowFn: () => void = () => {}
@@ -48,7 +43,6 @@ export function initBrowserViewManager(deps: {
   getMainWindow: () => BrowserWindow | null
   getPopupWindow: () => BrowserWindow | null
   getActiveWin: () => BrowserWindow | null
-  getMode: () => string
   onProviderSwitched: (key: string) => void
   createEdgeWindow: (win: BrowserWindow) => void
   destroyEdgeWindow: () => void
@@ -56,7 +50,6 @@ export function initBrowserViewManager(deps: {
   getMainWindow = deps.getMainWindow
   getPopupWindow = deps.getPopupWindow
   getActiveWin = deps.getActiveWin
-  getMode = deps.getMode
   onProviderSwitched = deps.onProviderSwitched
   createEdgeWindowFn = deps.createEdgeWindow
   destroyEdgeWindowFn = deps.destroyEdgeWindow
@@ -320,7 +313,7 @@ export async function injectClipboard(clipboardText: string): Promise<{ ok: bool
     }
   }
 
-  const selector = CHAT_INPUT_SELECTORS[currentProviderKey] || 'textarea, div[contenteditable="true"]'
+  const selector = 'textarea, div[contenteditable="true"]'
   const safeText = JSON.stringify(clipboardText)
   try {
     await view.webContents.executeJavaScript(`

@@ -50,20 +50,21 @@ export async function loadSettings(): Promise<Settings | null> {
   return null
 }
 
-// ===== 异步保存设置 =====
-export async function saveSettings(data: {
-  shortcut: string
-  switchShortcut: string
-  mode: string
-  enabledProviders: string[] | null
-  customProviders: CustomProvider[]
-  providerOrder: string[] | null
-  windowBounds: { x: number; y: number; width: number; height: number } | null
-  builtInColors: Record<string, { dark: string; light: string }>
-}): Promise<void> {
-  try {
-    await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(data))
-  } catch (e) {
-    log.error('Failed to save settings:', e)
-  }
+// ===== 串行写队列 =====
+// 所有 saveSettings 调用排队执行，避免并发写交错；
+// 每次写入前读取当前文件再合并 patch，防止部分字段覆盖其他字段
+let writeQueue: Promise<void> = Promise.resolve()
+
+// ===== 保存设置（Partial 合并 + 串行） =====
+export function saveSettings(patch: Partial<Settings>): Promise<void> {
+  writeQueue = writeQueue
+    .then(async () => {
+      const current = await loadSettings()
+      const merged = { ...(current ?? {}), ...patch }
+      await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(merged))
+    })
+    .catch(e => {
+      log.error('Failed to save settings:', e)
+    })
+  return writeQueue
 }
