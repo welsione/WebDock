@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>PoC 通知桥测试页</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, sans-serif; padding: 40px; background: #111; color: #eee; }
+    button { padding: 10px 20px; font-size: 14px; border: 0; border-radius: 8px; background: #4a9eff; color: #fff; cursor: pointer; margin: 8px 0; }
+    #log { white-space: pre-wrap; margin-top: 20px; font-size: 12px; color: #9aa; }
+  </style>
+</head>
+<body>
+  <h2>通知桥测试页（本页为 PoC 验证用）</h2>
+  <button id="btnNotify">触发 new Notification()</button>
+  <button id="btnFake">伪造 __MINEAI_NOTIFY__ console（安全测试）</button>
+  <div id="log"></div>
+  <script>
+    const logEl = document.getElementById('log')
+    function log(msg) { logEl.textContent += msg + '\n' }
+    document.getElementById('btnNotify').onclick = () => {
+      try {
+        const n = new Notification('PoC 测试通知', { body: '来自 WKWebView 的通知桥验证', tag: 'poc' })
+        log('Notification 已创建: ' + (n ? 'OK' : 'null'))
+      } catch (e) {
+        log('Notification 创建失败: ' + e.message)
+      }
+    }
+    document.getElementById('btnFake').onclick = () => {
+      console.log('__MINEAI_NOTIFY__:' + JSON.stringify({ title: '伪造来源', body: '这是一条伪造消息' }))
+      log('已输出伪造 console 消息（PoC 阶段 Rust 侧不监听 console，应无反应）')
+    }
+    // 页面加载即自报状态（经注入脚本探测）
+    log('window.Notification 已被替换: ' + (window.Notification.toString().indexOf('mineai') >= 0 || window.Notification.toString().indexOf('fetch') >= 0))
+    log('window.__TAURI__ 存在: ' + (typeof window.__TAURI__ !== 'undefined'))
+  </script>
+</body>
+</html>

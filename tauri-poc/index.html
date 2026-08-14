@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost" />
+    <title>Tauri PoC 控制台</title>
+    <style>
+      body { margin: 0; font: 12px/1.5 -apple-system, sans-serif; background: #1e1e28; color: #eee; }
+      .wrap { padding: 8px; }
+      h1 { font-size: 13px; margin: 0 0 8px; }
+      button { display: block; width: 100%; margin: 4px 0; padding: 6px; border: 0; border-radius: 6px;
+               background: #33334a; color: #eee; cursor: pointer; text-align: left; }
+      button:hover { background: #44445f; }
+      #log { margin-top: 8px; padding: 6px; background: #14141c; border-radius: 6px;
+             height: 340px; overflow-y: auto; font-size: 10px; white-space: pre-wrap; word-break: break-all; }
+      .ok { color: #5eead4; }
+      .err { color: #ff6b6b; }
+      .info { color: #9aa; }
+      #errbar { display: none; margin: 6px 0; padding: 6px; background: #5c1f1f; border-radius: 6px;
+                font-size: 10px; color: #ffb3b3; white-space: pre-wrap; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>PoC 控制台</h1>
+      <div id="sites"></div>
+      <div style="font-size:10px;color:#9aa;margin-top:6px">布局宽度</div>
+      <button id="w74">侧边栏 74px</button>
+      <button id="w240">侧边栏 240px</button>
+      <button id="w320">侧边栏 320px</button>
+      <div id="log"></div>
+      <div id="errbar"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
