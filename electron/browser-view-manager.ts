@@ -32,7 +32,6 @@ let sidebarCollapsed = false
 
 // ===== 外部回调 =====
 let getMainWindow: () => BrowserWindow | null = () => null
-let getPopupWindow: () => BrowserWindow | null = () => null
 let getActiveWin: () => BrowserWindow | null = () => null
 let onProviderSwitched: ((key: string) => void) | null = null
 let createEdgeWindowFn: ((win: BrowserWindow) => void) | null = null
@@ -41,14 +40,12 @@ let destroyEdgeWindowFn: () => void = () => {}
 // ===== 初始化回调注入 =====
 export function initBrowserViewManager(deps: {
   getMainWindow: () => BrowserWindow | null
-  getPopupWindow: () => BrowserWindow | null
   getActiveWin: () => BrowserWindow | null
   onProviderSwitched: (key: string) => void
   createEdgeWindow: (win: BrowserWindow) => void
   destroyEdgeWindow: () => void
 }): void {
   getMainWindow = deps.getMainWindow
-  getPopupWindow = deps.getPopupWindow
   getActiveWin = deps.getActiveWin
   onProviderSwitched = deps.onProviderSwitched
   createEdgeWindowFn = deps.createEdgeWindow
@@ -184,7 +181,7 @@ export function switchProvider(key: string): void {
     })
 
     view.webContents.loadURL(provider.url)
-    notifyRenderer(getMainWindow(), getPopupWindow(), 'loading', { provider: key, status: 'loading' })
+    notifyRenderer(getMainWindow(), 'loading', { provider: key, status: 'loading' })
 
     // 切换服务商快捷键
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

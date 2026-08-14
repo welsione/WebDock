@@ -24,7 +24,6 @@ interface ProviderSettings {
 interface ElectronAPI {
   switchProvider: (key: string) => void
   reload: () => void
-  toggleMode: () => Promise<string>
   getMode: () => Promise<string>
   getVersion: () => Promise<string>
   getCurrentProvider: () => Promise<string>

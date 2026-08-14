@@ -82,17 +82,13 @@ export function setupNotificationBridge(
   })
 }
 
-// ===== 通知渲染进程 =====
+// ===== 通知渲染进程（MENUBAR 弹窗已下线，仅主窗口） =====
 export function notifyRenderer(
   mainWindow: Electron.BrowserWindow | null,
-  popupWindow: Electron.BrowserWindow | null,
   channel: string,
   data: Record<string, unknown>
 ): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data)
-  }
-  if (popupWindow && !popupWindow.isDestroyed()) {
-    popupWindow.webContents.send(channel, data)
   }
 }

@@ -8,12 +8,10 @@ import { notifyRenderer } from './notification-bridge'
 import { UPDATE_CHECK_DELAY_MS } from './config'
 
 let mainWindow: BrowserWindow | null = null
-let popupWindow: BrowserWindow | null = null
 
 // ===== 设置窗口引用 =====
-export function setUpdateWindows(main: BrowserWindow | null, popup: BrowserWindow | null): void {
+export function setUpdateWindows(main: BrowserWindow | null): void {
   mainWindow = main
-  popupWindow = popup
 }
 
 // ===== 初始化自动更新 =====
@@ -22,23 +20,23 @@ export function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info: UpdateInfo) => {
-    notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'available', version: info.version })
+    notifyRenderer(mainWindow, 'update-status', { status: 'available', version: info.version })
   })
 
   autoUpdater.on('update-not-available', () => {
-    notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'none' })
+    notifyRenderer(mainWindow, 'update-status', { status: 'none' })
   })
 
   autoUpdater.on('download-progress', (progress: ProgressInfo) => {
-    notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'downloading', percent: progress.percent })
+    notifyRenderer(mainWindow, 'update-status', { status: 'downloading', percent: progress.percent })
   })
 
   autoUpdater.on('update-downloaded', () => {
-    notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'downloaded' })
+    notifyRenderer(mainWindow, 'update-status', { status: 'downloaded' })
   })
 
   autoUpdater.on('error', (err: Error) => {
-    notifyRenderer(mainWindow, popupWindow, 'update-status', { status: 'error', error: err.message })
+    notifyRenderer(mainWindow, 'update-status', { status: 'error', error: err.message })
   })
 
   // 启动后延迟检查更新

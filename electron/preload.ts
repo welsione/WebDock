@@ -56,7 +56,6 @@ export interface ProviderSettings {
 export interface ElectronAPI {
   switchProvider: (key: string) => void
   reload: () => void
-  toggleMode: () => Promise<string>
   getMode: () => Promise<string>
   getVersion: () => Promise<string>
   getCurrentProvider: () => Promise<string>
@@ -96,7 +95,6 @@ function onceOn<T>(channel: string, callback: (payload: T) => void): void {
 contextBridge.exposeInMainWorld('electronAPI', {
   switchProvider: (key: string) => ipcRenderer.send('switch-provider', key),
   reload: () => ipcRenderer.send('reload'),
-  toggleMode: () => ipcRenderer.invoke('toggle-mode'),
   getMode: () => ipcRenderer.invoke('get-mode'),
   getVersion: () => ipcRenderer.invoke('get-version'),
   getCurrentProvider: () => ipcRenderer.invoke('get-current-provider'),

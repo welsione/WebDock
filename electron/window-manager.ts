@@ -1,14 +1,14 @@
 // ===== 窗口管理模块 =====
-// 负责主窗口、弹窗、边缘条窗口的创建、销毁和位置管理
+// 负责主窗口、边缘条窗口的创建、销毁和位置管理
+// （MENUBAR 弹窗模式已下线：popupWindow 从不显示且无 UI 承载，相关代码已删除）
 
 import { BrowserWindow, screen, app } from 'electron'
 import path from 'path'
 import log from 'electron-log'
-import { POPUP_WIDTH, POPUP_HEIGHT, EDGE_PILL_WIDTH, EDGE_PILL_HEIGHT, RESIZE_UPDATE_DELAY_MS, BOUNDS_SAVE_DELAY_MS, MODE } from './config'
+import { EDGE_PILL_WIDTH, EDGE_PILL_HEIGHT, RESIZE_UPDATE_DELAY_MS, BOUNDS_SAVE_DELAY_MS } from './config'
 
 // ===== 状态 =====
 let mainWindow: BrowserWindow | null = null
-let popupWindow: BrowserWindow | null = null
 let edgeWindow: BrowserWindow | null = null
 let savedBounds: { x: number; y: number; width: number; height: number } | null = null
 let currentTheme = 'dark'
@@ -53,11 +53,10 @@ export function getSavedBoundsValue(): { x: number; y: number; width: number; he
 
 // ===== 窗口引用 =====
 export function getMainWindowRef(): BrowserWindow | null { return mainWindow }
-export function getPopupWindowRef(): BrowserWindow | null { return popupWindow }
 
 // ===== 获取活跃窗口 =====
-export function getActiveWin(mode: string): BrowserWindow | null {
-  return mode === MODE.MENUBAR ? popupWindow : mainWindow
+export function getActiveWin(): BrowserWindow | null {
+  return mainWindow
 }
 
 // ===== 校验窗口位置 =====
@@ -79,7 +78,7 @@ export function isValidBounds(bounds: { x: number; y: number; width: number; hei
 }
 
 // ===== 创建主窗口 =====
-export function createMainWindow(mode: string): void {
+export function createMainWindow(): void {
   const defaultBounds = { width: 1000, height: 700 }
   const bounds = isValidBounds(savedBounds)
     ? { ...savedBounds!, minWidth: 600, minHeight: 400 }
@@ -110,9 +109,7 @@ export function createMainWindow(mode: string): void {
   }
 
   mainWindow.once('ready-to-show', () => {
-    if (mode === MODE.WINDOW) {
-      mainWindow!.show()
-    }
+    mainWindow!.show()
   })
 
   // 窗口大小变化时更新 BrowserView（debounce）
@@ -135,13 +132,8 @@ export function createMainWindow(mode: string): void {
   mainWindow.on('resize', scheduleBoundsSave)
   mainWindow.on('move', scheduleBoundsSave)
 
-  mainWindow.on('close', (e) => {
-    if (mode === MODE.MENUBAR) {
-      e.preventDefault()
-      mainWindow!.hide()
-    } else {
-      destroyEdgeWindow()
-    }
+  mainWindow.on('close', () => {
+    destroyEdgeWindow()
   })
 
   mainWindow.on('closed', () => {
@@ -154,7 +146,7 @@ export function createMainWindow(mode: string): void {
 // ===== 显示主窗口 =====
 export function showMainWindow(): void {
   if (!mainWindow) {
-    createMainWindow(MODE.WINDOW)
+    createMainWindow()
   }
   mainWindow!.show()
   mainWindow!.focus()
@@ -170,73 +162,10 @@ export function showMainWindow(): void {
 export function toggleWindowVisibility(): void {
   const win = mainWindow
   if (!win) { showMainWindow(); return }
-  if (win.isVisible() && (popupWindow && popupWindow.isVisible())) {
-    popupWindow.hide()
-  } else if (win.isVisible()) {
+  if (win.isVisible()) {
     win.hide()
   } else {
     showMainWindow()
-  }
-}
-
-// ===== 创建弹窗 =====
-export function createPopupWindow(): BrowserWindow {
-  if (popupWindow) return popupWindow
-
-  popupWindow = new BrowserWindow({
-    width: POPUP_WIDTH,
-    height: POPUP_HEIGHT,
-    show: false,
-    frame: false,
-    resizable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true
-    }
-  })
-
-  if (import.meta.env.DEV) {
-    popupWindow.loadURL(process.env.ELECTRON_RENDERER_URL!)
-  } else {
-    popupWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
-  }
-
-  popupWindow.on('blur', () => {
-    if (popupWindow && popupWindow.isVisible()) {
-      popupWindow.hide()
-    }
-  })
-
-  popupWindow.on('closed', () => {
-    popupWindow = null
-  })
-
-  return popupWindow
-}
-
-// ===== 切换弹窗 =====
-export function togglePopup(
-  switchProviderFn_: (key: string) => void,
-  getCurrentProviderKey_: () => string,
-  hasView_: (key: string) => boolean
-): void {
-  if (!popupWindow) {
-    createPopupWindow()
-  }
-
-  if (popupWindow!.isVisible()) {
-    popupWindow!.hide()
-  } else {
-    popupWindow!.show()
-    popupWindow!.focus()
-
-    if (!hasView_(getCurrentProviderKey_())) {
-      switchProviderFn_(getCurrentProviderKey_())
-    }
   }
 }
 
@@ -297,7 +226,7 @@ export function createEdgeWindow(parentWin: BrowserWindow): void {
 export function updateEdgeWindowPosition(): void {
   if (!edgeWindow) return
 
-  const parentWin = mainWindow || popupWindow
+  const parentWin = mainWindow
   if (!parentWin) return
 
   const contentBounds = parentWin.getContentBounds()
@@ -324,19 +253,6 @@ export function destroyEdgeWindow(): void {
     }
     edgeWindow = null
   }
-}
-
-// ===== 设置模式 =====
-export function setMode(newMode: string): void {
-  if (newMode === MODE.WINDOW) {
-    showMainWindow()
-    if (popupWindow) popupWindow.hide()
-  } else {
-    if (mainWindow) mainWindow.hide()
-  }
-
-  if (mainWindow) mainWindow.webContents.send('mode-changed', newMode)
-  if (popupWindow) popupWindow.webContents.send('mode-changed', newMode)
 }
 
 // ===== 发送主题变更到边缘条 =====

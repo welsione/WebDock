@@ -10,16 +10,15 @@ import {
 } from './browser-view-manager'
 import {
   createMainWindow, showMainWindow, toggleWindowVisibility,
-  getMainWindowRef, getPopupWindowRef, createEdgeWindow, destroyEdgeWindow,
+  getMainWindowRef, createEdgeWindow, destroyEdgeWindow,
   getActiveWin as getActiveWinFromMgr,
   setSavedBounds, getSavedBoundsValue, initWindowManager
 } from './window-manager'
 import { getCurrentShortcut, setCurrentShortcut, registerGlobalShortcut, setToggleHandler, unregisterAllShortcuts } from './shortcut-manager'
 import { setupNotificationBridge, showNativeNotification } from './notification-bridge'
-import { setupIPC, getMode, setModeValue, setSwitchShortcutVal } from './ipc-handlers'
+import { setupIPC, setSwitchShortcutVal } from './ipc-handlers'
 import { setupAutoUpdater, setUpdateWindows } from './auto-updater'
 import { buildMenu } from './app-menu'
-import { MODE } from './config'
 
 function saveWindowBounds(): void {
   const main = getMainWindowRef()
@@ -39,8 +38,7 @@ initWindowManager({
 // BrowserView 管理器的窗口依赖注入（拆分后必须在入口显式组装，否则 switchProvider 无法工作）
 initBrowserViewManager({
   getMainWindow: getMainWindowRef,
-  getPopupWindow: getPopupWindowRef,
-  getActiveWin: () => getActiveWinFromMgr(getMode()),
+  getActiveWin: getActiveWinFromMgr,
   onProviderSwitched: () => {},
   createEdgeWindow: (win) => createEdgeWindow(win),
   destroyEdgeWindow
@@ -58,24 +56,23 @@ app.whenReady().then(async () => {
     if (s.providerOrder) setProviderOrder(s.providerOrder)
     if (s.windowBounds) setSavedBounds(s.windowBounds)
     if (s.builtInColors) setBuiltInColors(s.builtInColors)
-    if (s.mode) setModeValue(s.mode)
   }
   setupNotificationBridge((t, b, icon, key) =>
     showNativeNotification(t, b, icon, key, switchProvider, showMainWindow))
   setupIPC()
-  createMainWindow(getMode())
+  createMainWindow()
   buildMenu()
   const r = registerGlobalShortcut(getCurrentShortcut())
   if (!r.ok) console.error('Failed to register global shortcut:', r.error)
   if (app.isPackaged) {
-    setUpdateWindows(getMainWindowRef(), getPopupWindowRef())
+    setUpdateWindows(getMainWindowRef())
     setupAutoUpdater()
   }
 })
 
 app.on('will-quit', unregisterAllShortcuts)
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
-app.on('activate', () => { if (getMode() === MODE.WINDOW) showMainWindow() })
+app.on('activate', () => showMainWindow())
 app.on('web-contents-created', (_e, c) => {
   if (c.getType() !== 'window') return
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
