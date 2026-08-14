@@ -8,3 +8,4 @@ export const TOAST_DURATION_MS = 1600      // Toast 显示时间
 export const STATUS_DURATION_MS = 2000     // 状态指示器显示时间
 export const MIN_LOADING_MS = 200          // 加载遮罩最小显示时间
 export const EDGE_CLICK_THRESHOLD_PX = 3   // 边缘条拖拽阈值（小于此值视为点击）
+export const MAX_ICON_UPLOAD_BYTES = 256 * 1024 // 图标上传大小限制 256KB

@@ -7,6 +7,7 @@ import { initLoading, hideLoading, showStatus } from './ui/loading'
 import { initNav, renderNav, setupLoadingListener, setupProviderUpdateListener } from './ui/nav'
 import { setupShortcutRecording } from './ui/shortcuts'
 import { initUpdateBanner, setupUpdateStatusListener } from './ui/update-banner'
+import { initProviderModal } from './ui/provider-modal'
 import { FOCUS_NOTIFY_DELAY_MS, RELOAD_COOLDOWN_MS } from './utils/constants'
 import { byIdOrNull } from './utils/dom'
 
@@ -32,6 +33,8 @@ initUpdateBanner(
   byIdOrNull('btnUpdateAction'),
   byIdOrNull('btnUpdateDismiss')
 )
+
+initProviderModal()
 
 // ===== Global error handler =====
 window.onerror = () => hideLoading()

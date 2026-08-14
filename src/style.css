@@ -692,6 +692,23 @@ body.focus .settings-page {
   color: #f87171;
   background: rgba(248,113,113,0.1);
 }
+.provider-edit {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  display: grid;
+  place-items: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.provider-edit:hover {
+  color: var(--accent);
+  background: rgba(74,158,255,0.1);
+}
 
 .btn-sm {
   height: 32px;

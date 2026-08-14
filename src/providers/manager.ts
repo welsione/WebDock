@@ -1,6 +1,7 @@
 import { getState, removeCustomProvider, setEnabledProviders } from '../state'
 import { escapeHtml } from '../utils/escape-html'
 import { byIdOrNull } from '../utils/dom'
+import { openProviderModal } from '../ui/provider-modal'
 
 let dragSrcEl: HTMLElement | null = null
 
@@ -18,7 +19,6 @@ export function renderProviderList(): void {
     icon: string | null
     color: { dark: string; light: string }
     checked: boolean
-    index?: number
   }
 
   const allItems: ProviderItem[] = []
@@ -29,11 +29,11 @@ export function renderProviderList(): void {
       icon: p.icon, color: p.color || { dark: '#151517', light: '#ffffff' }, checked: isChecked
     })
   })
-  custom.forEach((p: { key: string; name: string; url: string; icon: string | null; color?: { dark: string; light: string } }, i: number) => {
+  custom.forEach((p: { key: string; name: string; url: string; icon: string | null; color?: { dark: string; light: string } }) => {
     allItems.push({
       type: 'custom', key: p.key, name: p.name, url: p.url,
       icon: p.icon || null, color: p.color || { dark: '#1a1e28', light: '#f0f2f5' },
-      index: i, checked: true
+      checked: true
     })
   })
 
@@ -56,16 +56,21 @@ export function renderProviderList(): void {
       ? `<button class="provider-delete" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
       : ''
 
+    const editHtml = item.type === 'custom'
+      ? `<button class="provider-edit" title="编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>`
+      : ''
+
     el.innerHTML = `
       <div class="drag-handle" title="拖拽排序">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/></svg>
       </div>
       <input type="checkbox" class="provider-checkbox" ${item.checked ? 'checked' : ''}>
       ${iconHtml}
-      <div class="provider-item-info" data-key="${escapeHtml(item.key)}" data-type="${item.type}" data-index="${item.index ?? ''}">
+      <div class="provider-item-info" data-key="${escapeHtml(item.key)}" data-type="${item.type}">
         <div class="provider-item-name">${escapeHtml(item.name)}</div>
         <div class="provider-item-url">${escapeHtml(item.url)}</div>
       </div>
+      ${editHtml}
       ${deleteHtml}
     `
 
@@ -78,10 +83,22 @@ export function renderProviderList(): void {
 
     if (item.type === 'custom') {
       const deleteBtn = el.querySelector('.provider-delete') as HTMLElement
-      deleteBtn.addEventListener('click', () => {
+      deleteBtn.addEventListener('click', e => {
+        e.stopPropagation()
         el.remove()
-        if (item.index !== undefined) removeCustomProvider(item.index)
+        removeCustomProvider(item.key) // 按 key 删除——渲染快照 index 在拖拽后会漂移
         saveProviderOrderFromDOM()
+      })
+      const editBtn = el.querySelector('.provider-edit') as HTMLElement
+      editBtn.addEventListener('click', e => {
+        e.stopPropagation()
+        openProviderModal({
+          key: item.key,
+          name: item.name,
+          url: item.url,
+          icon: item.icon,
+          color: item.color
+        })
       })
     }
 
