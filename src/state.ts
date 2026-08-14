@@ -83,11 +83,11 @@ export function addCustomProvider(provider: { key: string; name: string; url: st
   }
 }
 
-/** 删除自定义服务商（通过 setter 而非直接 splice） */
-export function removeCustomProvider(index: number): void {
+/** 删除自定义服务商（按 key 定位——渲染快照中的 index 在拖拽/多次删除后会漂移，禁止用 index） */
+export function removeCustomProvider(key: string): void {
   state.providerSettings = {
     ...state.providerSettings,
-    custom: state.providerSettings.custom.filter((_, i) => i !== index)
+    custom: state.providerSettings.custom.filter(p => p.key !== key)
   }
 }
 
@@ -110,10 +110,10 @@ export function setBuiltInProviderColor(key: string, color: { dark: string; ligh
   }
 }
 
-/** 更新自定义服务商信息 */
-export function updateCustomProvider(index: number, updates: Partial<{ name: string; url: string; icon: string | null; color: { dark: string; light: string } }>): void {
-  const custom = state.providerSettings.custom.map((p, i) =>
-    i === index ? { ...p, ...updates } : p
+/** 更新自定义服务商（按 key 定位，理由同 removeCustomProvider） */
+export function updateCustomProvider(key: string, updates: Partial<{ name: string; url: string; icon: string | null; color: { dark: string; light: string } }>): void {
+  const custom = state.providerSettings.custom.map(p =>
+    p.key === key ? { ...p, ...updates } : p
   )
   state.providerSettings = {
     ...state.providerSettings,

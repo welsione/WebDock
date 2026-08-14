@@ -75,21 +75,32 @@ describe('state - 自定义服务商 setter', () => {
     expect(after[0].key).toBe('c1')
   })
 
-  it('removeCustomProvider 按索引删除', async () => {
+  it('removeCustomProvider 按 key 删除', async () => {
     const { getState, addCustomProvider, removeCustomProvider } = await loadState()
     addCustomProvider({ key: 'c1', name: 'C1', url: 'https://c1.com', icon: null, color: { dark: '#000', light: '#fff' } })
     addCustomProvider({ key: 'c2', name: 'C2', url: 'https://c2.com', icon: null, color: { dark: '#000', light: '#fff' } })
-    removeCustomProvider(0)
+    removeCustomProvider('c1')
     const custom = getState().providerSettings.custom
     expect(custom.length).toBe(1)
     expect(custom[0].key).toBe('c2')
   })
 
-  it('updateCustomProvider 只更新目标项', async () => {
+  it('removeCustomProvider 按 key 删除不受顺序影响（拖拽/多次删除后 key 仍稳定）', async () => {
+    const { getState, addCustomProvider, removeCustomProvider } = await loadState()
+    addCustomProvider({ key: 'a', name: 'A', url: 'https://a.com', icon: null, color: { dark: '#000', light: '#fff' } })
+    addCustomProvider({ key: 'b', name: 'B', url: 'https://b.com', icon: null, color: { dark: '#000', light: '#fff' } })
+    addCustomProvider({ key: 'c', name: 'C', url: 'https://c.com', icon: null, color: { dark: '#000', light: '#fff' } })
+    // 模拟拖拽后的视觉顺序：DOM 上是 [c, a, b]，此时若按 index=2 删除会删错——key 定位必须删到 c
+    removeCustomProvider('c')
+    const custom = getState().providerSettings.custom
+    expect(custom.map(p => p.key)).toEqual(['a', 'b'])
+  })
+
+  it('updateCustomProvider 按 key 更新目标项', async () => {
     const { getState, addCustomProvider, updateCustomProvider } = await loadState()
     addCustomProvider({ key: 'c1', name: 'C1', url: 'https://c1.com', icon: null, color: { dark: '#000', light: '#fff' } })
     addCustomProvider({ key: 'c2', name: 'C2', url: 'https://c2.com', icon: null, color: { dark: '#000', light: '#fff' } })
-    updateCustomProvider(1, { name: 'C2 改名' })
+    updateCustomProvider('c2', { name: 'C2 改名' })
     const custom = getState().providerSettings.custom
     expect(custom[0].name).toBe('C1')
     expect(custom[1].name).toBe('C2 改名')
