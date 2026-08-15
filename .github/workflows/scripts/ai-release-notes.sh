@@ -25,23 +25,41 @@ fi
 
 # ---------- 回退 1：GitHub generate-notes ----------
 fallback_github() {
-  if [ -n "$(git tag -l "${TAG}")" ]; then
-    gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-      -f tag_name="${TAG}" -f target_commitish="${GITHUB_SHA:-HEAD}" -q .body > "${OUT}"
+  if [ -n "$(git tag -l "${TAG}")" ] && \
+     gh api --method POST "repos/${GITHUB_REPOSITORY:-}/releases/generate-notes" \
+       -f tag_name="${TAG}" -f target_commitish="${GITHUB_SHA:-HEAD}" -q .body > "${OUT}"; then
     return 0
   fi
   return 1
 }
 
-# ---------- 回退 2：纯 git log ----------
+# ---------- 回退 2：纯 git log（按 commit 类型分节） ----------
+section() {
+  local title="$1" pat="$2"
+  echo "## ${title}"
+  local lines
+  lines="$(echo "${LOG}" | grep -iE "^- *${pat}" | sed 's/^-[[:space:]]*//' || true)"
+  if [ -n "${lines}" ]; then
+    echo "${lines}"
+  else
+    echo "- 无"
+  fi
+  echo
+}
+
 fallback_log() {
   {
     echo "# WebDock ${VERSION}（${DATE}）"
     echo
-    echo "## 变更"
-    echo "${LOG}"
+    echo "> 由 CI 自动生成（未配置 AI key 的降级模式，按 git 提交记录自动分节）"
     echo
-    echo "> 由 CI 自动生成（未配置 AI key 的降级模式）"
+    section "✨ 新功能" "(feat|feature|add|新增)"
+    section "🚀 改进与优化" "(refactor|perf|improve|build|优化)"
+    section "🐛 修复" "(fix|修复)"
+    section "🔒 安全" "(security|安全)"
+    section "📦 其他" "(chore|docs|test|ui|style)"
+    echo "## 如何获取"
+    echo "从 GitHub Release 下载 DMG；若提示「无法打开」请执行 \`xattr -cr /Applications/WebDock.app\`"
   } > "${OUT}"
 }
 
