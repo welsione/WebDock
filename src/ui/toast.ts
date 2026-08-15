@@ -1,10 +1,13 @@
-let container: HTMLElement
+import { TOAST_DURATION_MS } from '../utils/constants'
 
-export function initToast(containerId: string): void {
-  container = document.getElementById(containerId) as HTMLElement
+let container: HTMLElement | null = null
+
+export function initToast(el: HTMLElement): void {
+  container = el
 }
 
 export function toast(msg: string): void {
+  if (!container) return
   const el = document.createElement('div')
   el.className = 'toast'
   el.textContent = msg
@@ -14,7 +17,7 @@ export function toast(msg: string): void {
     el.classList.add('out')
     el.addEventListener('animationend', () => el.remove(), { once: true })
   }
-  const t = setTimeout(remove, 1600)
+  const t = setTimeout(remove, TOAST_DURATION_MS)
   el.addEventListener('click', () => {
     clearTimeout(t)
     remove()

@@ -21,7 +21,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
-          edge: resolve(__dirname, 'electron/edge-preload.ts')
+          edge: resolve(__dirname, 'electron/edge-preload.ts'),
+          bridge: resolve(__dirname, 'electron/bridge-preload.ts')
         }
       }
     }

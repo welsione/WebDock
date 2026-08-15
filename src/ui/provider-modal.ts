@@ -1,224 +1,298 @@
-import { getState } from '../state'
+// ===== 添加/编辑网页应用弹窗（WebDock） =====
+// 绑定 index.html 中 #webAppModal 的静态结构（id 以 modal* 命名）。
+
+import { addWebApp, updateWebApp } from '../state'
+import { renderWebAppList, saveWebAppOrderFromDOM } from '../providers/manager'
 import { toast } from './toast'
+import { byIdOrNull } from '../utils/dom'
+import { MAX_ICON_UPLOAD_BYTES } from '../utils/constants'
 
-let modalIconData: string | null = null
-let modalMode: 'add' | 'edit' = 'add'
-let modalEditTarget: { key: string; type: 'builtin' | 'custom'; index: number } | null = null
-
-export function initProviderModal(): void {
-  // 颜色选择器同步 hex 显示
-  ;['modalColorDark', 'modalColorLight'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', e => {
-      const hexId = id === 'modalColorDark' ? 'modalColorDarkHex' : 'modalColorLightHex'
-      const hexEl = document.getElementById(hexId)
-      if (hexEl) hexEl.textContent = (e.target as HTMLInputElement).value
-    })
-  })
-
-  document.getElementById('btnAddProvider')?.addEventListener('click', openAddModal)
-  document.getElementById('modalClose')?.addEventListener('click', closeModal)
-  document.getElementById('modalCancel')?.addEventListener('click', closeModal)
-  document.getElementById('addProviderModal')?.addEventListener('click', e => {
-    if (e.target === document.getElementById('addProviderModal')) closeModal()
-  })
-
-  // 图标预览点击上传
-  document.getElementById('iconPreview')?.addEventListener('click', () => {
-    ;(document.getElementById('iconFileInput') as HTMLInputElement)?.click()
-  })
-  document.getElementById('iconFileInput')?.addEventListener('change', e => {
-    const input = e.target as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      modalIconData = reader.result as string
-      const preview = document.getElementById('iconPreview')
-      if (preview) preview.innerHTML = `<img src="${modalIconData}" alt="预览">`
-    }
-    reader.readAsDataURL(file)
-  })
-
-  // 从 URL 获取图标
-  document.getElementById('btnFetchIcon')?.addEventListener('click', async () => {
-    let iconUrl = (document.getElementById('modalIconUrl') as HTMLInputElement).value.trim()
-    if (!iconUrl) return
-    if (!/^https?:\/\//.test(iconUrl)) iconUrl = 'https://' + iconUrl
-    const btn = document.getElementById('btnFetchIcon') as HTMLButtonElement
-    btn.textContent = '…'
-    btn.disabled = true
-    const result = await window.electronAPI.fetchIconUrl(iconUrl)
-    if (result) {
-      modalIconData = result
-      const preview = document.getElementById('iconPreview')
-      if (preview) preview.innerHTML = `<img src="${modalIconData}" alt="预览">`
-    }
-    btn.textContent = '获取'
-    btn.disabled = false
-  })
-
-  // 保存
-  document.getElementById('modalSave')?.addEventListener('click', handleSave)
-}
-
-export function openAddModal(): void {
-  modalMode = 'add'
-  modalEditTarget = null
-  setText('modalTitle', '添加自定义服务商')
-  setText('modalSave', '添加')
-  showFields(true)
-  setInput('modalName', '')
-  setInput('modalUrl', '')
-  setInput('modalIconUrl', '')
-  modalIconData = null
-  setHtml('iconPreview', '?')
-  setColor('modalColorDark', '#1a1e28', 'modalColorDarkHex')
-  setColor('modalColorLight', '#f0f2f5', 'modalColorLightHex')
-  document.getElementById('addProviderModal')?.classList.add('visible')
-  ;(document.getElementById('modalName') as HTMLInputElement)?.focus()
-}
-
-export function openEditModal(item: {
-  type: 'builtin' | 'custom'
+export interface WebAppModalEditTarget {
   key: string
   name: string
   url: string
   icon: string | null
-  color: { dark: string; light: string }
-  index?: number
-}): void {
-  modalMode = 'edit'
-  modalEditTarget = { key: item.key, type: item.type, index: item.index ?? 0 }
-  const isBuiltin = item.type === 'builtin'
+  color: WebAppColor
+  notify?: WebAppNotify
+  permissions?: WebAppPermissions
+  trustCertificate?: boolean
+  launch?: WebAppLaunch
+}
 
-  setText('modalTitle', isBuiltin ? `编辑 ${item.name}` : '编辑服务商')
-  setText('modalSave', '保存')
-  showFields(!isBuiltin)
-  setInput('modalName', item.name || '')
-  setInput('modalUrl', item.url || '')
-  setInput('modalIconUrl', '')
-  modalIconData = null
+interface ModalElements {
+  overlay: HTMLElement
+  title: HTMLElement
+  name: HTMLInputElement
+  url: HTMLInputElement
+  iconUrl: HTMLInputElement
+  iconPreview: HTMLElement
+  iconFileInput: HTMLInputElement
+  colorDark: HTMLInputElement
+  colorDarkHex: HTMLElement
+  colorLight: HTMLInputElement
+  colorLightHex: HTMLElement
+  saveBtn: HTMLButtonElement
+  launchCommand: HTMLInputElement
+  launchCwd: HTMLInputElement
+  launchHealthUrl: HTMLInputElement
+  launchExitWithApp: HTMLInputElement
+  notifyNative: HTMLInputElement
+  permCamera: HTMLInputElement
+  permMicrophone: HTMLInputElement
+  permGeo: HTMLInputElement
+  trustCert: HTMLInputElement
+}
 
-  if (item.icon && item.icon.startsWith('data:')) {
-    setHtml('iconPreview', `<img src="${item.icon}" alt="预览">`)
-  } else {
-    setHtml('iconPreview', item.name ? item.name[0].toUpperCase() : '?')
+let els: ModalElements | null = null
+let currentEditKey: string | null = null // null = 新增模式
+let pendingIcon: string | null = null // 本次编辑选中的图标 data URL
+
+function collectElements(): ModalElements | null {
+  const overlay = byIdOrNull<HTMLElement>('webAppModal')
+  const name = byIdOrNull<HTMLInputElement>('modalName')
+  const url = byIdOrNull<HTMLInputElement>('modalUrl')
+  if (!overlay || !name || !url) return null
+  return {
+    overlay,
+    title: byIdOrNull<HTMLElement>('modalTitle')!,
+    name,
+    url,
+    iconUrl: byIdOrNull<HTMLInputElement>('modalIconUrl')!,
+    iconPreview: byIdOrNull<HTMLElement>('iconPreview')!,
+    iconFileInput: byIdOrNull<HTMLInputElement>('iconFileInput')!,
+    colorDark: byIdOrNull<HTMLInputElement>('modalColorDark')!,
+    colorDarkHex: byIdOrNull<HTMLElement>('modalColorDarkHex')!,
+    colorLight: byIdOrNull<HTMLInputElement>('modalColorLight')!,
+    colorLightHex: byIdOrNull<HTMLElement>('modalColorLightHex')!,
+    saveBtn: byIdOrNull<HTMLButtonElement>('modalSave')!,
+    launchCommand: byIdOrNull<HTMLInputElement>('modalLaunchCommand')!,
+    launchCwd: byIdOrNull<HTMLInputElement>('modalLaunchCwd')!,
+    launchHealthUrl: byIdOrNull<HTMLInputElement>('modalLaunchHealthUrl')!,
+    launchExitWithApp: byIdOrNull<HTMLInputElement>('modalLaunchExitWithApp')!,
+    notifyNative: byIdOrNull<HTMLInputElement>('modalNotifyNative')!,
+    permCamera: byIdOrNull<HTMLInputElement>('modalPermCamera')!,
+    permMicrophone: byIdOrNull<HTMLInputElement>('modalPermMicrophone')!,
+    permGeo: byIdOrNull<HTMLInputElement>('modalPermGeo')!,
+    trustCert: byIdOrNull<HTMLInputElement>('modalTrustCert')!
   }
-
-  const color = item.color || { dark: '#1a1e28', light: '#f0f2f5' }
-  setColor('modalColorDark', color.dark || '#1a1e28', 'modalColorDarkHex')
-  setColor('modalColorLight', color.light || '#f0f2f5', 'modalColorLightHex')
-
-  document.getElementById('addProviderModal')?.classList.add('visible')
 }
 
-export function closeModal(): void {
-  document.getElementById('addProviderModal')?.classList.remove('visible')
-}
-
-function showFields(show: boolean): void {
-  const display = show ? '' : 'none'
-  setDisplay('modalFieldGroup', display)
-  setDisplay('modalFieldUrl', display)
-  setDisplay('modalFieldIcon', display)
-  setDisplay('modalColorRow', '')
-}
-
-async function handleSave(): Promise<void> {
-  const btn = document.getElementById('modalSave') as HTMLButtonElement
+/** URL 校验：必须 http/https（任意主机，含 localhost/127.0.0.1——本地服务是核心场景） */
+export function validateProviderUrl(raw: string): string | null {
+  const value = raw.trim()
+  if (!value) return '请输入网址'
+  let parsed: URL
   try {
-    const colorDark = getInput('modalColorDark')
-    const colorLight = getInput('modalColorLight')
-    const newColor = { dark: colorDark, light: colorLight }
-
-    if (modalMode === 'add') {
-      const name = getInput('modalName').trim()
-      let url = getInput('modalUrl').trim()
-      if (!name || !url) return
-      if (!/^https?:\/\//.test(url)) url = 'https://' + url
-      btn.textContent = '添加中…'
-      btn.disabled = true
-      let icon = modalIconData
-      if (!icon) {
-        icon = await window.electronAPI.fetchFavicon(url)
-      }
-      const key = 'custom_' + Date.now()
-      getState().providerSettings.custom.push({ key, name, url, icon: icon || null, color: newColor })
-      document.dispatchEvent(new CustomEvent('provider-settings-changed'))
-      closeModal()
-      toast(`已添加 ${name}`)
-    } else {
-      const { key, type, index } = modalEditTarget!
-      const { providerSettings } = getState()
-      if (type === 'builtin') {
-        const p = providerSettings.builtIn.find(x => x.key === key)
-        if (p) {
-          p.color = newColor
-        }
-        await window.electronAPI.saveProviderSettings({
-          enabled: providerSettings.enabled,
-          custom: providerSettings.custom,
-          builtInColors: providerSettings.builtIn.reduce<Record<string, { dark: string; light: string }>>((acc, p) => {
-            if (p.color) acc[p.key] = p.color
-            return acc
-          }, {})
-        })
-      } else {
-        const p = providerSettings.custom[index]
-        if (p) {
-          const name = getInput('modalName').trim()
-          let url = getInput('modalUrl').trim()
-          if (!name || !url) return
-          if (!/^https?:\/\//.test(url)) url = 'https://' + url
-          p.name = name
-          p.url = url
-          p.color = newColor
-          if (modalIconData) p.icon = modalIconData
-        }
-        document.dispatchEvent(new CustomEvent('provider-settings-changed'))
-      }
-      closeModal()
-      toast('已保存')
-      // 即时更新侧边栏颜色
-      if (key === getState().currentProviderKey) {
-        const sidebar = document.querySelector('.sidebar') as HTMLElement
-        if (sidebar) {
-          const themeKey = document.documentElement.dataset.theme || 'dark'
-          sidebar.style.background = newColor[themeKey as keyof typeof newColor] || newColor.dark
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to save provider:', e)
-    toast('添加失败，请重试')
-  } finally {
-    btn.textContent = modalMode === 'add' ? '添加' : '保存'
-    btn.disabled = false
+    parsed = new URL(value)
+  } catch {
+    return '网址格式不正确'
   }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return '仅支持 http/https 协议'
+  }
+  if (!parsed.hostname) return '网址格式不正确'
+  return null
 }
 
-// DOM helpers
-function setText(id: string, text: string): void {
-  const el = document.getElementById(id)
-  if (el) el.textContent = text
+/** 校验图标上传：大小限制 + 仅图片 */
+export function validateIconFile(file: File): string | null {
+  if (!file.type.startsWith('image/')) return '仅支持图片文件'
+  if (file.size > MAX_ICON_UPLOAD_BYTES) return '图片不能超过 256KB'
+  return null
 }
-function setHtml(id: string, html: string): void {
-  const el = document.getElementById(id)
-  if (el) el.innerHTML = html
+
+function setPreview(icon: string | null): void {
+  if (!els) return
+  if (icon) {
+    els.iconPreview.innerHTML = `<img src="${icon.replace(/"/g, '&quot;')}" alt="图标预览">`
+    els.iconPreview.title = '点击更换图片'
+  } else {
+    els.iconPreview.innerHTML = '?'
+    els.iconPreview.title = '点击上传图片'
+  }
+  pendingIcon = icon
 }
-function setInput(id: string, value: string): void {
-  const el = document.getElementById(id) as HTMLInputElement
-  if (el) el.value = value
+
+function openModal(): void {
+  if (!els) return
+  els.overlay.classList.add('visible')
 }
-function getInput(id: string): string {
-  return (document.getElementById(id) as HTMLInputElement)?.value || ''
+
+function closeModal(): void {
+  if (!els) return
+  els.overlay.classList.remove('visible')
+  currentEditKey = null
+  pendingIcon = null
 }
-function setColor(inputId: string, value: string, hexId: string): void {
-  const el = document.getElementById(inputId) as HTMLInputElement
-  if (el) el.value = value
-  setText(hexId, value)
+
+function setCheckbox(el: HTMLInputElement, value: boolean): void {
+  el.checked = value
 }
-function setDisplay(id: string, display: string): void {
-  const el = document.getElementById(id)
-  if (el) el.style.display = display
+
+/** 打开弹窗：edit 有值 = 编辑模式，否则新增模式 */
+export function openWebAppModal(edit?: WebAppModalEditTarget): void {
+  if (!els) {
+    els = collectElements()
+    if (!els) return
+  }
+  currentEditKey = edit?.key ?? null
+  els.title.textContent = edit ? '编辑网页应用' : '添加网页应用'
+  els.saveBtn.textContent = edit ? '保存' : '添加'
+  els.name.value = edit?.name ?? ''
+  els.url.value = edit?.url ?? ''
+  els.iconUrl.value = ''
+  els.colorDark.value = edit?.color.dark ?? '#1a1e28'
+  els.colorDarkHex.textContent = els.colorDark.value
+  els.colorLight.value = edit?.color.light ?? '#f0f2f5'
+  els.colorLightHex.textContent = els.colorLight.value
+
+  // 本地服务
+  els.launchCommand.value = edit?.launch?.command ?? ''
+  els.launchCwd.value = edit?.launch?.cwd ?? ''
+  els.launchHealthUrl.value = edit?.launch?.healthUrl ?? ''
+  setCheckbox(els.launchExitWithApp, edit?.launch?.exitWithApp ?? false)
+
+  // 通知
+  setCheckbox(els.notifyNative, edit?.notify?.native ?? true)
+
+  // 权限（开关 = allow / deny）
+  setCheckbox(els.permCamera, edit?.permissions?.camera === 'allow')
+  setCheckbox(els.permMicrophone, edit?.permissions?.microphone === 'allow')
+  setCheckbox(els.permGeo, edit?.permissions?.geolocation === 'allow')
+
+  // 证书
+  setCheckbox(els.trustCert, edit?.trustCertificate ?? false)
+
+  setPreview(edit?.icon ?? null)
+  openModal()
+}
+
+function handleSave(): void {
+  if (!els) return
+  const name = els.name.value.trim()
+  if (!name) {
+    toast('请输入名称')
+    return
+  }
+  const urlError = validateProviderUrl(els.url.value)
+  if (urlError) {
+    toast(urlError)
+    return
+  }
+  const url = els.url.value.trim()
+  const color = { dark: els.colorDark.value, light: els.colorLight.value }
+
+  const notify: WebAppNotify = {
+    native: els.notifyNative.checked,
+    titleNotify: false
+  }
+  const permissions: WebAppPermissions = {
+    camera: els.permCamera.checked ? 'allow' : 'deny',
+    microphone: els.permMicrophone.checked ? 'allow' : 'deny',
+    geolocation: els.permGeo.checked ? 'allow' : 'deny'
+  }
+  const launch: WebAppLaunch | undefined = els.launchCommand.value.trim()
+    ? {
+        command: els.launchCommand.value.trim(),
+        cwd: els.launchCwd.value.trim() || undefined,
+        healthUrl: els.launchHealthUrl.value.trim() || undefined,
+        exitWithApp: els.launchExitWithApp.checked
+      }
+    : undefined
+
+  const updates: WebAppInfo = {
+    key: currentEditKey ?? crypto.randomUUID(),
+    name,
+    url,
+    icon: pendingIcon ?? '',
+    color,
+    notify,
+    permissions,
+    trustCertificate: els.trustCert.checked,
+    launch
+  }
+
+  if (currentEditKey) {
+    updateWebApp(currentEditKey, updates)
+  } else {
+    addWebApp(updates)
+  }
+  // 上报主进程（saveWebAppOrderFromDOM 内部会 saveWebAppSettings + 推送 webapps-updated）
+  saveWebAppOrderFromDOM()
+  renderWebAppList()
+  closeModal()
+}
+
+/** 初始化弹窗事件绑定（app 入口调用一次） */
+export function initWebAppModal(): void {
+  els = collectElements()
+  if (!els) return
+
+  byIdOrNull<HTMLButtonElement>('btnAddWebApp')?.addEventListener('click', () => openWebAppModal())
+
+  byIdOrNull<HTMLElement>('modalClose')?.addEventListener('click', closeModal)
+  byIdOrNull<HTMLButtonElement>('modalCancel')?.addEventListener('click', closeModal)
+  els.overlay.addEventListener('click', e => {
+    if (e.target === els?.overlay) closeModal()
+  })
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && els?.overlay.classList.contains('visible')) closeModal()
+  })
+
+  els.saveBtn.addEventListener('click', handleSave)
+
+  // 获取图标 + 自动补全标题（任意主机，含本地服务；自动回退站点 favicon）
+  byIdOrNull<HTMLButtonElement>('btnFetchIcon')?.addEventListener('click', async () => {
+    if (!els) return
+    const urlError = validateProviderUrl(els.iconUrl.value)
+    if (urlError) {
+      toast('图标网址无效，仅支持 http/https')
+      return
+    }
+    const icon = await window.electronAPI.fetchIconUrl(els.iconUrl.value.trim())
+    if (icon) {
+      setPreview(icon)
+      toast('图标已获取')
+    } else {
+      toast('未找到图标，保存后将使用首字母图标')
+    }
+  })
+
+  // URL 失焦 → 自动补全名称与图标（仅新增模式且名称为空时）
+  els.url.addEventListener('blur', async () => {
+    if (!els || currentEditKey !== null) return
+    if (els.name.value.trim() || !els.url.value.trim()) return
+    if (validateProviderUrl(els.url.value)) return
+    const meta = await window.electronAPI.fetchPageMeta(els.url.value.trim())
+    if (meta.title && !els.name.value.trim()) {
+      els.name.value = meta.title
+    }
+    if (meta.icon && !pendingIcon) {
+      setPreview(meta.icon)
+    }
+  })
+
+  // 本地上传
+  els.iconPreview.addEventListener('click', () => els?.iconFileInput.click())
+  els.iconFileInput.addEventListener('change', () => {
+    const file = els?.iconFileInput.files?.[0]
+    if (!file) return
+    const err = validateIconFile(file)
+    if (err) {
+      toast(err)
+      if (els) els.iconFileInput.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setPreview(String(reader.result))
+    reader.readAsDataURL(file)
+  })
+
+  // 颜色联动
+  els.colorDark.addEventListener('input', () => {
+    if (els) els.colorDarkHex.textContent = els.colorDark.value
+  })
+  els.colorLight.addEventListener('input', () => {
+    if (els) els.colorLightHex.textContent = els.colorLight.value
+  })
 }

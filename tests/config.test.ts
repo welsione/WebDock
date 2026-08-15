@@ -126,37 +126,3 @@ describe('matchesKeyEvent', () => {
     expect(matchesKeyEvent(event, 'Control+Shift+Tab')).toBe(true)
   })
 })
-
-// ===== generateLetterIcon (basic validation) =====
-describe('generateLetterIcon', () => {
-  function generateLetterIcon(name: string): string {
-    const letter = (name || '?').charAt(0).toUpperCase()
-    const colors = ['#5eead4','#f472b6','#a78bfa','#fb923c','#38bdf8','#4ade80','#facc15','#f87171']
-    const color = colors[letter.charCodeAt(0) % colors.length]
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="${color}"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
-    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-  }
-
-  it('returns a valid data URI', () => {
-    const result = generateLetterIcon('TestProvider')
-    expect(result).toMatch(/^data:image\/svg\+xml;base64,/)
-  })
-
-  it('uses the first letter of the name', () => {
-    const result = generateLetterIcon('ChatGPT')
-    const base64Part = result.split(',')[1]
-    const decoded = Buffer.from(base64Part, 'base64').toString()
-    expect(decoded).toContain('>C<')
-  })
-
-  it('different names produce different icons', () => {
-    expect(generateLetterIcon('A')).not.toBe(generateLetterIcon('B'))
-  })
-
-  it('handles empty name', () => {
-    const result = generateLetterIcon('')
-    const base64Part = result.split(',')[1]
-    const decoded = Buffer.from(base64Part, 'base64').toString()
-    expect(decoded).toContain('>?<')
-  })
-})

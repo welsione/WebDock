@@ -1,5 +1,5 @@
 appId: com.mineai.hub
-productName: MineAI Hub
+productName: WebDock
 directories:
   output: release
   buildResources: assets
@@ -7,7 +7,7 @@ directories:
 publish:
   provider: github
   owner: welsione
-  repo: MineAI-Hub
+  repo: WebDock
 
 asar: true
 

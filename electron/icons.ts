@@ -1,223 +1,120 @@
-import { app, nativeImage, NativeImage } from 'electron'
+// ===== 图标工具模块 =====
+// 负责应用图标、服务商图标获取、通知图标写入
+
+import { app, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import crypto from 'crypto'
 import log from 'electron-log'
+import { NOTIFY_ICON_CLEANUP_MS } from './config'
 
-// ===== App Icon =====
-const appIconBaseDir = app.isPackaged
-  ? path.join(process.resourcesPath, 'assets')
-  : path.join(__dirname, '..', '..', 'assets')
-export const APP_ICON = `data:image/png;base64,${fs.readFileSync(path.join(appIconBaseDir, 'app-icon.png')).toString('base64')}`
-
-// ===== MIME 检测 =====
-function detectMimeFromBuffer(buf: Buffer): string {
-  if (buf[0] === 0x89 && buf[1] === 0x50) return 'image/png'
-  if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg'
-  if (buf[0] === 0x47 && buf[1] === 0x49) return 'image/gif'
-  if (buf[0] === 0x00 && buf[1] === 0x00) return 'image/x-icon'
-  if (buf[0] === 0x3c) return 'image/svg+xml'
-  return 'image/png'
-}
-
-// ===== ICO 解析 =====
-// 从 ICO 容器中提取最大的 PNG 编码图像
-function extractPNGFromICO(icoBuf: Buffer): Uint8Array | null {
+// ===== 从 data URL 解析 NativeImage =====
+export function dataUrlToNativeImage(dataUrl: string): Electron.NativeImage | null {
   try {
-    if (icoBuf.length < 22) return null
-    if (icoBuf.readUInt16LE(0) !== 0) return null
-    if (icoBuf.readUInt16LE(2) !== 1) return null
-    const count = icoBuf.readUInt16LE(4)
-    if (count === 0 || count > 20) return null
-    let bestSize = 0, bestOffset = 0, bestDataSize = 0
-    for (let i = 0; i < count; i++) {
-      const off = 6 + i * 16
-      const w = icoBuf[off] || 256
-      const h = icoBuf[off + 1] || 256
-      const dataSize = icoBuf.readUInt32LE(off + 8)
-      const dataOffset = icoBuf.readUInt32LE(off + 12)
-      if (dataOffset + dataSize > icoBuf.length) continue
-      if (w * h >= bestSize) { bestSize = w * h; bestOffset = dataOffset; bestDataSize = dataSize }
-    }
-    if (bestDataSize === 0) return null
-    const imgData = icoBuf.subarray(bestOffset, bestOffset + bestDataSize)
-    if (imgData[0] === 0x89 && imgData[1] === 0x50 && imgData[2] === 0x4e && imgData[3] === 0x47) {
-      return imgData
-    }
-    return null
-  } catch { return null }
-}
-
-// ===== 图标下载 =====
-function tryFetchIcon(iconUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const { net } = require('electron')
-      const request = net.request(iconUrl)
-      request.on('response', (response: Electron.IncomingMessage) => {
-        if (response.statusCode !== 200) { resolve(null); return }
-        const chunks: Buffer[] = []
-        response.on('data', (chunk: Buffer) => chunks.push(chunk))
-        response.on('end', () => {
-          const buf = Buffer.concat(chunks)
-          if (buf.length < 100) { resolve(null); return }
-          // ICO 格式：提取内嵌 PNG，因为 nativeImage 不支持 ICO
-          const ct = response.headers['content-type']
-          let mime = Array.isArray(ct) ? ct[0] : ct
-          if (!mime) mime = detectMimeFromBuffer(buf)
-          if (mime === 'image/x-icon' || mime?.includes('icon')) {
-            const png = extractPNGFromICO(buf)
-            if (png) {
-              resolve(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
-              return
-            }
-          }
-          resolve(`data:${mime};base64,${buf.toString('base64')}`)
-        })
-      })
-      request.on('error', () => resolve(null))
-      setTimeout(() => { try { request.abort() } catch { /* ignore */ } }, 3000)
-      request.end()
-    } catch (e) { log.error('Failed to fetch icon:', iconUrl, e); resolve(null) }
-  })
-}
-
-// 从页面 HTML 中解析图标链接
-function fetchHtmlIcons(pageUrl: string): Promise<string[]> {
-  return new Promise((resolve) => {
-    try {
-      const { net } = require('electron')
-      const req = net.request(pageUrl)
-      let data = ''
-      req.on('response', (response: Electron.IncomingMessage) => {
-        if (response.statusCode !== 200) { resolve([]); return }
-        response.on('data', (chunk: Buffer) => { data += chunk.toString() })
-        response.on('end', () => {
-          const icons: string[] = []
-          const origin = new URL(pageUrl).origin
-          const re = /<link\s[^>]*\brel=["']?(?:shortcut\s+)?icon["']?[^>]*\bhref=["']([^"']+)["']/gi
-          let m: RegExpExecArray | null
-          while ((m = re.exec(data)) !== null) {
-            let href = m[1]
-            if (href.startsWith('//')) href = 'https:' + href
-            else if (href.startsWith('/')) href = origin + href
-            else if (!href.startsWith('http')) href = origin + '/' + href
-            icons.push(href)
-          }
-          resolve(icons)
-        })
-      })
-      req.on('error', () => resolve([]))
-      setTimeout(() => { try { req.abort() } catch { /* ignore */ } }, 5000)
-      req.end()
-    } catch { resolve([]) }
-  })
-}
-
-// 获取网站 favicon：先试标准路径，再解析页面 HTML
-export async function fetchFavicon(siteUrl: string): Promise<string | null> {
-  const origin = new URL(siteUrl).origin
-  for (const url of [
-    `${origin}/favicon.ico`,
-    `${origin}/favicon.png`,
-    `${origin}/apple-touch-icon.png`,
-    `${origin}/apple-touch-icon-precomposed.png`,
-  ]) {
-    const icon = await tryFetchIcon(url)
-    if (icon) return icon
-  }
-  const htmlIcons = await fetchHtmlIcons(siteUrl)
-  for (const url of htmlIcons) {
-    const icon = await tryFetchIcon(url)
-    if (icon) return icon
-  }
-  return null
-}
-
-// 直接按 URL 抓取图标（供设置页手动输入图标网址使用）
-export function fetchIconByUrl(iconUrl: string): Promise<string | null> {
-  return tryFetchIcon(iconUrl)
-}
-
-// ===== 自定义服务商首字母图标 =====
-export function generateLetterIcon(name: string): string {
-  const letter = (name || '?').charAt(0).toUpperCase()
-  const colors = ['#5eead4','#f472b6','#a78bfa','#fb923c','#38bdf8','#4ade80','#facc15','#f87171']
-  const color = colors[letter.charCodeAt(0) % colors.length]
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="${color}"/><text x="24" y="32" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="-apple-system,sans-serif">${letter}</text></svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-}
-
-// ===== Data URL → NativeImage 转换 =====
-// 封装了 createFromDataURL / createFromBuffer / ICO提取 / SVG回退的完整流程
-export function dataUrlToNativeImage(dataUrl: string): NativeImage | null {
-  let img = nativeImage.createFromDataURL(dataUrl)
-  if (!img.isEmpty()) return img
-
-  // createFromDataURL 失败，尝试 raw buffer（处理 ICO 等格式）
-  try {
+    if (!dataUrl.startsWith('data:')) return null
     const base64 = dataUrl.split(',')[1]
-    if (base64) {
-      const raw = Buffer.from(base64, 'base64')
-      let bufForNative: Buffer = raw
-      if (dataUrl.includes('image/x-icon') || dataUrl.includes('icon')) {
-        const png = extractPNGFromICO(raw)
-        if (png) bufForNative = Buffer.from(png)
-      }
-      img = nativeImage.createFromBuffer(bufForNative)
-      if (!img.isEmpty()) return img
-    }
-  } catch { /* ignore */ }
-
-  // SVG 图标：提取颜色生成纯色方块
-  if (dataUrl.includes('image/svg+xml')) {
-    const svgMatch = dataUrl.match(/fill="(#[0-9a-fA-F]{6})"/)
-    let hex = svgMatch?.[1] || ''
-    if (!hex) {
-      try {
-        const base64 = dataUrl.split(',')[1]
-        if (base64) {
-          const raw = Buffer.from(base64, 'base64')
-          const sampled = nativeImage.createFromBuffer(raw)
-          if (!sampled.isEmpty()) {
-            const png = sampled.resize({ width: 1, height: 1 }).toPNG()
-            if (png.length > 30) {
-              hex = '#' + [png[png.length - 4], png[png.length - 3], png[png.length - 2]]
-                .map(v => v.toString(16).padStart(2, '0')).join('')
-            }
-          }
-        }
-      } catch { /* ignore */ }
-    }
-    const r = parseInt(hex.slice(1, 3), 16) || 0x5e
-    const g = parseInt(hex.slice(3, 5), 16) || 0xea
-    const b = parseInt(hex.slice(5, 7), 16) || 0xd4
-    const size = 48
-    const buf = Buffer.alloc(size * size * 4)
-    for (let i = 0; i < size * size; i++) {
-      buf[i * 4] = b; buf[i * 4 + 1] = g; buf[i * 4 + 2] = r; buf[i * 4 + 3] = 255
-    }
-    img = nativeImage.createFromBitmap(buf, { width: size, height: size })
-    if (!img.isEmpty()) return img
+    if (!base64) return null
+    return nativeImage.createFromBuffer(Buffer.from(base64, 'base64'))
+  } catch {
+    return null
   }
-
-  return null
 }
 
-// 将 NativeImage 写入临时文件（macOS 通知需要本地文件路径）
-export function writeIconToTempFile(img: NativeImage): string | null {
+// ===== 从 URL 获取图标 =====
+export function generateLetterIcon(name: string): string {
+  const letter = (name || '?')[0].toUpperCase()
+  const size = 48
+  const canvas = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+      <rect width="100%" height="100%" rx="8" fill="#4a9eff"/>
+      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle"
+        fill="white" font-size="24" font-family="system-ui, sans-serif" font-weight="600">${letter}</text>
+    </svg>`
+  // 直接返回 SVG data URL（<img> 可直接渲染）。
+  // 注意：不能用 nativeImage.createFromBuffer 处理 SVG buffer——Electron 仅支持 PNG/JPEG，
+  // 对 SVG 会得到空图像，toDataURL() 返回无效的空 data URL
+  return `data:image/svg+xml;base64,${Buffer.from(canvas).toString('base64')}`
+}
+
+// ===== 异步写入临时图标文件 =====
+export async function writeIconToTempFile(image: Electron.NativeImage): Promise<string | null> {
   try {
-    const tmpDir = path.join(app.getPath('temp'), 'mineai-notify')
-    fs.mkdirSync(tmpDir, { recursive: true })
-    const tmpFile = path.join(tmpDir, `${Date.now()}.png`)
-    fs.writeFileSync(tmpFile, img.toPNG())
-    // 清理 1 分钟前的旧文件
+    const tmpDir = path.join(app.getPath('userData'), 'notify-icons')
+    await fs.promises.mkdir(tmpDir, { recursive: true })
+
+    // 清理超过 1 小时的旧图标
+    const now = Date.now()
     try {
-      const now = Date.now()
-      for (const f of fs.readdirSync(tmpDir)) {
-        const fp = path.join(tmpDir, f)
-        if (now - fs.statSync(fp).mtimeMs > 60000) fs.unlinkSync(fp)
+      const files = await fs.promises.readdir(tmpDir)
+      for (const file of files) {
+        try {
+          const filePath = path.join(tmpDir, file)
+          const stat = await fs.promises.stat(filePath)
+          if (now - stat.mtimeMs > NOTIFY_ICON_CLEANUP_MS) {
+            await fs.promises.unlink(filePath)
+          }
+        } catch { /* ignore individual file errors */ }
       }
     } catch { /* ignore cleanup errors */ }
+
+    const tmpFile = path.join(tmpDir, `${crypto.randomUUID()}.png`)
+    await fs.promises.writeFile(tmpFile, image.toPNG())
     return tmpFile
-  } catch { return null }
+  } catch (e) {
+    log.error('Failed to write icon to temp file:', e)
+    return null
+  }
+}
+
+// ===== 从 URL 获取 favicon =====
+// 只接受 image/* 响应：HTML/JSON 页面（如 SPA 或本地服务首页）不能当图标解析
+async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+  const response = await fetch(url)
+  if (!response.ok) return null
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.startsWith('image/')) return null
+  const buffer = Buffer.from(await response.arrayBuffer())
+  // SVG 无法经 nativeImage 解析（createFromBuffer 仅支持 PNG/JPEG），直接返回 SVG data URL
+  //（<img> 可渲染；与 generateLetterIcon 同源的坑）
+  if (contentType.includes('svg') || buffer.toString('utf8', 0, 512).includes('<svg')) {
+    return `data:image/svg+xml;base64,${buffer.toString('base64')}`
+  }
+  const img = nativeImage.createFromBuffer(buffer)
+  return img.isEmpty() ? null : img.toDataURL()
+}
+
+// 从站点自动找 favicon：依次尝试约定路径（/favicon.ico → /favicon.svg），
+// 单个候选失败（404/HTML/网络错误）不阻断后续候选
+export async function fetchFavicon(url: string): Promise<string | null> {
+  try {
+    const parsedUrl = new URL(url)
+    const origin = parsedUrl.origin
+    const candidates = [`${origin}/favicon.ico`, `${origin}/favicon.svg`]
+    for (const candidate of candidates) {
+      try {
+        const icon = await fetchImageAsDataUrl(candidate)
+        if (icon) return icon
+      } catch { /* 继续下一个候选 */ }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+// ===== 从图标 URL 获取图标 =====
+// 1) 直接尝试用户填的 URL（若是图片则直接成功）
+// 2) 回退：从该站点自动找 /favicon.ico（用户常填服务商主页而非图标地址）
+export async function fetchIconByUrl(iconUrl: string): Promise<string | null> {
+  try {
+    const parsed = new URL(iconUrl)
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null
+  } catch {
+    return null
+  }
+  try {
+    const direct = await fetchImageAsDataUrl(iconUrl)
+    if (direct) return direct
+  } catch { /* 网络失败继续回退 favicon */ }
+  return await fetchFavicon(iconUrl)
 }

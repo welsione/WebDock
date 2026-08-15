@@ -1,35 +1,46 @@
 import './style.css'
-import { getState, setCurrentProvider, updateProviders, updateProviderSettings, setSwitchShortcut } from './state'
+import {
+  setCurrentWebApp, updateWebApps, updateWebAppSettings, setSwitchShortcut
+} from './state'
+import { renderWebAppList, saveWebAppOrderFromDOM } from './providers/manager'
 import { initToast, toast } from './ui/toast'
 import { Theme } from './ui/theme'
-import { initLoading, showLoading, hideLoading, showStatus } from './ui/loading'
-import { initNav, renderNav, setupLoadingListener, setupProviderUpdateListener } from './ui/nav'
+import { initLoading, hideLoading, showLoading, showStatus } from './ui/loading'
+import { initNav, renderNav, setupLoadingListener, setupWebAppUpdateListener } from './ui/nav'
 import { setupShortcutRecording } from './ui/shortcuts'
-import { initProviderModal } from './ui/provider-modal'
-import { renderProviderList, saveProviderOrderFromDOM } from './providers/manager'
 import { initUpdateBanner, setupUpdateStatusListener } from './ui/update-banner'
+import { initWebAppModal } from './ui/provider-modal'
+import { FOCUS_NOTIFY_DELAY_MS, RELOAD_COOLDOWN_MS } from './utils/constants'
+import { byIdOrNull } from './utils/dom'
 
 // ===== Initialize UI modules =====
-initToast('toastContainer')
-initLoading('loadingOverlay', 'loadingText', 'statusIndicator')
-initNav('nav')
-initProviderModal()
+const toastContainer = byIdOrNull<HTMLElement>('toastContainer')
+if (toastContainer) initToast(toastContainer)
+
+const loadingEl = byIdOrNull<HTMLElement>('loadingOverlay')
+const loadingTextEl = byIdOrNull<HTMLElement>('loadingText')
+const statusEl = byIdOrNull<HTMLElement>('statusIndicator')
+if (loadingEl && loadingTextEl && statusEl) {
+  initLoading(loadingEl, loadingTextEl, statusEl)
+}
+
+const navEl = byIdOrNull<HTMLElement>('nav')
+if (navEl) initNav(navEl)
+
 initUpdateBanner(
-  'updateBanner',
-  'updateBannerText',
-  'updateProgress',
-  'updateProgressBar',
-  'btnUpdateAction',
-  'btnUpdateDismiss'
+  byIdOrNull('updateBanner'),
+  byIdOrNull('updateBannerText'),
+  byIdOrNull('updateProgress'),
+  byIdOrNull('updateProgressBar'),
+  byIdOrNull('btnUpdateAction'),
+  byIdOrNull('btnUpdateDismiss')
 )
 
+initWebAppModal()
+
 // ===== Global error handler =====
-window.onerror = (_msg, _source, _lineno, _colno, _error) => {
-  hideLoading()
-}
-window.onunhandledrejection = () => {
-  hideLoading()
-}
+window.onerror = () => hideLoading()
+window.onunhandledrejection = () => hideLoading()
 
 // ===== Focus Mode =====
 let focusMode = false
@@ -39,82 +50,85 @@ function syncFocusUI(isFocus: boolean): void {
 }
 function toggleFocus(): void {
   syncFocusUI(!focusMode)
-  if (focusMode) {
-    setTimeout(() => {
-      window.electronAPI.notifySidebarState(focusMode)
-    }, 250)
-  } else {
+  setTimeout(() => {
     window.electronAPI.notifySidebarState(focusMode)
-  }
+  }, FOCUS_NOTIFY_DELAY_MS)
 }
 
 // ===== Action Buttons =====
-document.getElementById('reloadFrame')?.addEventListener('click', () => {
+let reloadCooldown = false
+byIdOrNull<HTMLButtonElement>('reloadFrame')?.addEventListener('click', () => {
+  if (reloadCooldown) return
+  reloadCooldown = true
   window.electronAPI.reload()
   showStatus('已重载')
+  setTimeout(() => { reloadCooldown = false }, RELOAD_COOLDOWN_MS)
 })
 
-document.getElementById('pasteClipboard')?.addEventListener('click', async () => {
-  const result = await window.electronAPI.injectClipboard()
-  if (result.ok) {
-    toast('已粘贴剪贴板内容')
-  } else {
-    toast(result.error || '粘贴失败')
-  }
-})
-
-document.getElementById('toggleFocus')?.addEventListener('click', e => {
+byIdOrNull<HTMLButtonElement>('toggleFocus')?.addEventListener('click', e => {
   e.stopPropagation()
   toggleFocus()
 })
 
 // ===== Settings Page =====
-const settingsPage = document.getElementById('settingsPage') as HTMLElement
-const settingsTheme = document.getElementById('settingsTheme') as HTMLElement
+const settingsPage = byIdOrNull<HTMLElement>('settingsPage')
+const settingsTheme = byIdOrNull<HTMLElement>('settingsTheme')
 
 function refreshSettings(): void {
   window.electronAPI.getShortcut().then(s => {
-    const el = document.getElementById('shortcutInput')
-    if (el) {
-      el.textContent = s || '未设置'
-      el.classList.remove('recording')
-    }
+    const el = byIdOrNull<HTMLElement>('shortcutInput')
+    if (el) { el.textContent = s || '未设置'; el.classList.remove('recording') }
   })
   window.electronAPI.getSwitchShortcut().then(s => {
-    const el = document.getElementById('switchShortcutInput')
-    if (el) {
-      el.textContent = s || '未设置'
-      el.classList.remove('recording')
-      setSwitchShortcut(s || 'Shift+Tab')
-    }
+    const el = byIdOrNull<HTMLElement>('switchShortcutInput')
+    if (el) { el.textContent = s || '未设置'; el.classList.remove('recording'); setSwitchShortcut(s || 'Shift+Tab') }
   })
-  const isDark = Theme.get() === 'dark'
-  settingsTheme.classList.toggle('on', isDark)
-  const hint = document.getElementById('settingsThemeHint')
-  if (hint) hint.textContent = isDark ? '暗色' : '亮色'
-  window.electronAPI.getProviderSettings().then(s => {
-    updateProviderSettings(s)
-    renderProviderList()
+  if (settingsTheme) {
+    const isDark = Theme.get() === 'dark'
+    settingsTheme.classList.toggle('on', isDark)
+    const hint = byIdOrNull<HTMLElement>('settingsThemeHint')
+    if (hint) hint.textContent = isDark ? '暗色' : '亮色'
+  }
+  window.electronAPI.getWebAppSettings().then(s => {
+    updateWebAppSettings(s)
+    document.dispatchEvent(new CustomEvent('settings-refresh-webapps'))
   })
 }
 
-document.getElementById('toggleSettings')?.addEventListener('click', () => {
+byIdOrNull<HTMLButtonElement>('toggleSettings')?.addEventListener('click', () => {
   refreshSettings()
-  settingsPage.classList.add('visible')
+  settingsPage?.classList.add('visible')
   window.electronAPI.toggleSettings(true)
 })
 
-document.getElementById('btnSettingsBack')?.addEventListener('click', () => {
-  settingsPage.classList.remove('visible')
+byIdOrNull<HTMLButtonElement>('btnSettingsBack')?.addEventListener('click', () => {
+  settingsPage?.classList.remove('visible')
   window.electronAPI.toggleSettings(false)
 })
 
-settingsTheme.addEventListener('click', () => {
+settingsTheme?.addEventListener('click', () => {
   Theme.toggle()
-  const isDark = Theme.get() === 'dark'
-  settingsTheme.classList.toggle('on', isDark)
-  const hint = document.getElementById('settingsThemeHint')
-  if (hint) hint.textContent = isDark ? '暗色' : '亮色'
+  if (settingsTheme) {
+    const isDark = Theme.get() === 'dark'
+    settingsTheme.classList.toggle('on', isDark)
+    const hint = byIdOrNull<HTMLElement>('settingsThemeHint')
+    if (hint) hint.textContent = isDark ? '暗色' : '亮色'
+  }
+})
+
+// 数据导出/导入
+byIdOrNull<HTMLButtonElement>('btnExportData')?.addEventListener('click', async () => {
+  const r = await window.electronAPI.exportData()
+  toast(r.ok ? '配置已导出' : (r.error || '导出失败'))
+})
+byIdOrNull<HTMLButtonElement>('btnImportData')?.addEventListener('click', async () => {
+  const r = await window.electronAPI.importData()
+  if (r.ok) {
+    toast('配置已导入')
+    refreshSettings()
+  } else {
+    toast(r.error || '导入失败')
+  }
 })
 
 // ===== Shortcut Recording =====
@@ -141,100 +155,77 @@ setupShortcutRecording(
 )
 
 // ===== Settings page check update =====
-document.getElementById('btnCheckUpdate')?.addEventListener('click', async () => {
-  const btn = document.getElementById('btnCheckUpdate') as HTMLElement
-  const hint = document.getElementById('updateHint') as HTMLElement
+byIdOrNull<HTMLButtonElement>('btnCheckUpdate')?.addEventListener('click', async () => {
+  const btn = byIdOrNull<HTMLButtonElement>('btnCheckUpdate')
+  const hint = byIdOrNull<HTMLElement>('updateHint')
+  if (!btn) return
   btn.textContent = '检查中…'
-  ;(btn as HTMLButtonElement).disabled = true
-  hint.textContent = '正在连接更新服务器…'
+  btn.disabled = true
+  if (hint) hint.textContent = '正在连接更新服务器…'
   const result = await window.electronAPI.checkUpdate()
-  if (!result.ok) {
-    hint.textContent = '检查失败，请稍后重试'
-    btn.textContent = '检查更新'
-    ;(btn as HTMLButtonElement).disabled = false
+  if (hint) {
+    if (!result.ok) hint.textContent = '检查失败，请稍后重试'
+    else if (result.hasUpdate) hint.textContent = '发现新版本，请查看顶部更新提示'
+    else hint.textContent = '当前已是最新版本'
   }
+  btn.textContent = '检查更新'
+  btn.disabled = false
 })
 
-// ===== Provider settings refresh listener =====
-document.addEventListener('settings-refresh-providers', () => {
-  window.electronAPI.getProviderSettings().then(s => {
-    updateProviderSettings(s)
-    renderProviderList()
+// ===== Settings refresh listeners =====
+document.addEventListener('settings-refresh-webapps', () => {
+  window.electronAPI.getWebAppSettings().then(s => {
+    updateWebAppSettings(s)
+    document.dispatchEvent(new CustomEvent('webapp-settings-changed'))
   })
 })
 
-document.addEventListener('provider-settings-changed', () => {
-  renderProviderList()
-  saveProviderOrderFromDOM()
+document.addEventListener('webapp-settings-changed', () => {
+  renderWebAppList()
+  saveWebAppOrderFromDOM()
 })
 
 // ===== IPC Events =====
 setupLoadingListener()
-setupProviderUpdateListener()
+setupWebAppUpdateListener()
 setupUpdateStatusListener()
+
+window.electronAPI.onLoading(data => {
+  const { app, status } = data as { app: string; status: 'loading' | 'loaded' | 'error' | 'starting' }
+  if (status === 'starting') showLoading('正在启动本地服务…')
+  else if (status === 'loading') showLoading('正在加载…')
+  else hideLoading()
+  void app
+})
 
 window.electronAPI.onModeChange(mode => {
   document.body.dataset.mode = mode
 })
 
-window.electronAPI.onCurrentProviderChanged(key => {
-  setCurrentProvider(key)
-  renderNav(getState().providerStatus)
+window.electronAPI.onCurrentWebAppChanged(key => {
+  setCurrentWebApp(key)
+  renderNav()
 })
 
 window.electronAPI.onSidebarColor(color => {
-  const sidebar = document.querySelector('.sidebar') as HTMLElement
+  const sidebar = document.querySelector('.sidebar') as HTMLElement | null
   if (sidebar) sidebar.style.background = color
 })
 
 window.electronAPI.onExitFocusMode(() => syncFocusUI(false))
 
-// ===== Switch provider shortcut =====
-function matchShortcut(e: KeyboardEvent, acc: string): boolean {
-  if (!acc) return false
-  const parts = acc.split('+')
-  const mods: Record<string, boolean> = { Meta: e.metaKey, Control: e.ctrlKey, Alt: e.altKey, Shift: e.shiftKey }
-  const expectedMods = parts.filter(p => ['Meta', 'Control', 'Alt', 'Shift'].includes(p))
-  const expectedKey = parts.find(p => !['Meta', 'Control', 'Alt', 'Shift'].includes(p))
-  if (!expectedKey) return false
-  for (const m of ['Meta', 'Control', 'Alt', 'Shift']) {
-    if (mods[m] !== expectedMods.includes(m)) return false
-  }
-  const keyCode = e.code.startsWith('Key') ? e.code.slice(3) : e.code
-  return keyCode === expectedKey
-}
-
-function cycleProvider(): void {
-  const { providers, currentProviderKey } = getState()
-  if (providers.length === 0) return
-  const idx = providers.findIndex(p => p.key === currentProviderKey)
-  const next = providers[(idx + 1) % providers.length]
-  if (next.key !== currentProviderKey) {
-    setCurrentProvider(next.key)
-    window.electronAPI.switchProvider(next.key)
-  }
-}
-
-document.addEventListener('keydown', e => {
-  if (matchShortcut(e, getState().switchShortcut)) {
-    e.preventDefault()
-    cycleProvider()
-  }
-})
-
 // ===== Init =====
 async function init(): Promise<void> {
-  const state = getState()
-  state.providers = await window.electronAPI.getProviders()
-  state.currentProviderKey = await window.electronAPI.getCurrentProvider()
+  updateWebApps(await window.electronAPI.getWebApps())
+  setCurrentWebApp(await window.electronAPI.getCurrentWebApp())
   const mode = await window.electronAPI.getMode()
   document.body.dataset.mode = mode
 
   const version = await window.electronAPI.getVersion()
-  const verEl = document.getElementById('appVersion')
+  const verEl = byIdOrNull<HTMLElement>('appVersion')
   if (verEl) verEl.textContent = `v${version}`
 
-  renderNav(state.providerStatus)
+  renderNav()
   Theme.apply()
   Theme.listenSystemTheme()
   const ss = await window.electronAPI.getSwitchShortcut()
@@ -243,4 +234,7 @@ async function init(): Promise<void> {
   window.electronAPI.notifyThemeChange(Theme.get())
 }
 
-init()
+init().catch(e => {
+  console.error('App init failed:', e)
+  toast('应用初始化失败，请重启')
+})

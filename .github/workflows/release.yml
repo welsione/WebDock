@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 要发布的版本号（留空则用 package.json 版本；tag 推送时自动取 tag）
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 全量历史 + tags，供 Release 文档生成使用
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine version and tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::版本号 $VERSION 与 package.json 版本 $PKG_VERSION 不一致，请先同步再发布"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "将发布: v$VERSION"
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build renderer & main (electron-vite)
+        run: npx electron-vite build
+
+      - name: Package DMGs (x64 + arm64)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # 未签名构建
+        run: npx electron-builder --mac --publish never
+
+      - name: Verify artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ls -lh release/
+          for f in \
+            "WebDock-$VERSION.dmg" \
+            "WebDock-$VERSION-arm64.dmg" \
+            "WebDock-$VERSION.dmg.blockmap" \
+            "WebDock-$VERSION-arm64.dmg.blockmap" \
+            "latest-mac.yml"; do
+            if [ ! -f "release/$f" ]; then
+              echo "::error::缺少发布产物 release/$f"
+              exit 1
+            fi
+          done
+
+      - name: Generate release notes (AI)
+        id: notes
+        env:
+          AI_API_KEY: ${{ secrets.RELEASE_AI_KEY }}
+          AI_BASE_URL: ${{ vars.RELEASE_AI_BASE_URL }}
+          AI_MODEL: ${{ vars.RELEASE_AI_MODEL }}
+        run: bash .github/workflows/scripts/ai-release-notes.sh "${{ steps.version.outputs.version }}" notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG 已存在，请先删除或使用新版本"
+            exit 1
+          fi
+          gh release create "$TAG" \
+            --title "WebDock $VERSION" \
+            --notes-file notes.md \
+            release/WebDock-$VERSION.dmg \
+            release/WebDock-$VERSION-arm64.dmg \
+            release/WebDock-$VERSION.dmg.blockmap \
+            release/WebDock-$VERSION-arm64.dmg.blockmap \
+            release/latest-mac.yml
+          echo "✅ Release $TAG 已发布"
