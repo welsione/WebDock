@@ -1,19 +1,24 @@
-export type ProviderStatusMap = Map<string, 'loading' | 'error'>
+export type AppStatusMap = Map<string, 'loading' | 'error' | 'starting'>
 
 interface AppState {
-  providers: ReadonlyArray<ProviderInfo>
-  currentProviderKey: string
-  providerStatus: ProviderStatusMap
-  providerSettings: ProviderSettings
+  webApps: ReadonlyArray<WebAppInfo>
+  currentWebAppKey: string
+  appStatus: AppStatusMap
+  webAppSettings: WebAppSettings
   switchShortcut: string
+  notifications: ReadonlyArray<NotificationItem>
 }
 
 const state: AppState = {
-  providers: [],
-  currentProviderKey: 'deepseek',
-  providerStatus: new Map(),
-  providerSettings: { builtIn: [], enabled: null, custom: [], order: null },
-  switchShortcut: 'Shift+Tab'
+  webApps: [],
+  currentWebAppKey: 'deepseek',
+  appStatus: new Map(),
+  webAppSettings: {
+    webApps: [],
+    appSettings: { notifyDefaultNative: true, audioExclusive: true, viewCacheLimit: 0, clearNotificationsOnQuit: false }
+  },
+  switchShortcut: 'Shift+Tab',
+  notifications: []
 }
 
 function deepFreeze<T>(obj: T): T {
@@ -29,94 +34,122 @@ function deepFreeze<T>(obj: T): T {
 /**
  * 返回状态的只读快照（副本隔离）：
  * - 每次调用创建新对象并深冻结，调用方 mutate（push/set/赋值）会在严格模式下抛错
- * - Map/Set 无法通过 Object.freeze 防写，因此 providerStatus 返回副本，mutate 副本不影响内部状态
+ * - Map/Set 无法通过 Object.freeze 防写，因此 appStatus 返回副本，mutate 副本不影响内部状态
  * - setter 通过替换引用更新内部状态，与快照互不干扰
  */
 export function getState(): Readonly<AppState> {
   return deepFreeze({
-    providers: state.providers,
-    currentProviderKey: state.currentProviderKey,
-    providerStatus: new Map(state.providerStatus),
-    providerSettings: {
-      builtIn: [...state.providerSettings.builtIn],
-      enabled: state.providerSettings.enabled ? [...state.providerSettings.enabled] : null,
-      custom: [...state.providerSettings.custom],
-      order: state.providerSettings.order ? [...state.providerSettings.order] : null
+    webApps: state.webApps,
+    currentWebAppKey: state.currentWebAppKey,
+    appStatus: new Map(state.appStatus),
+    webAppSettings: {
+      webApps: [...state.webAppSettings.webApps],
+      appSettings: { ...state.webAppSettings.appSettings }
     },
-    switchShortcut: state.switchShortcut
+    switchShortcut: state.switchShortcut,
+    notifications: [...state.notifications]
   })
 }
 
-export function setCurrentProvider(key: string): void {
-  state.currentProviderKey = key
-  document.dispatchEvent(new CustomEvent('provider-changed', { detail: { key } }))
+export function setCurrentWebApp(key: string): void {
+  state.currentWebAppKey = key
+  document.dispatchEvent(new CustomEvent('webapp-changed', { detail: { key } }))
 }
 
-export function updateProviders(providers: ProviderInfo[]): void {
-  state.providers = Object.freeze(providers)
+export function updateWebApps(apps: WebAppInfo[]): void {
+  state.webApps = Object.freeze(apps)
 }
 
-export function updateProviderSettings(settings: ProviderSettings): void {
-  state.providerSettings = settings
+export function updateWebAppSettings(settings: WebAppSettings): void {
+  state.webAppSettings = settings
 }
 
 export function setSwitchShortcut(shortcut: string): void {
   state.switchShortcut = shortcut
 }
 
-/** 更新服务商加载状态（替换 Map 引用，避免 mutate 冻结对象） */
-export function setProviderStatus(key: string, status: 'loading' | 'error' | 'loaded'): void {
-  const next = new Map(state.providerStatus)
+/** 更新网页应用加载状态（替换 Map 引用，避免 mutate 冻结对象） */
+export function setAppStatus(key: string, status: 'loading' | 'error' | 'loaded' | 'starting'): void {
+  const next = new Map(state.appStatus)
   if (status === 'loaded') {
     next.delete(key)
   } else {
     next.set(key, status)
   }
-  state.providerStatus = next
+  state.appStatus = next
 }
 
-/** 添加自定义服务商（通过 setter 而非直接 push） */
-export function addCustomProvider(provider: { key: string; name: string; url: string; icon: string | null; color: { dark: string; light: string } }): void {
-  state.providerSettings = {
-    ...state.providerSettings,
-    custom: [...state.providerSettings.custom, provider]
+/** 添加网页应用（通过 setter 而非直接 push） */
+export function addWebApp(app: WebAppInfo): void {
+  state.webAppSettings = {
+    ...state.webAppSettings,
+    webApps: [...state.webAppSettings.webApps, app]
   }
 }
 
-/** 删除自定义服务商（按 key 定位——渲染快照中的 index 在拖拽/多次删除后会漂移，禁止用 index） */
-export function removeCustomProvider(key: string): void {
-  state.providerSettings = {
-    ...state.providerSettings,
-    custom: state.providerSettings.custom.filter(p => p.key !== key)
+/** 删除网页应用（按 key 定位——渲染快照中的 index 在拖拽/多次删除后会漂移，禁止用 index） */
+export function removeWebApp(key: string): void {
+  state.webAppSettings = {
+    ...state.webAppSettings,
+    webApps: state.webAppSettings.webApps.filter(p => p.key !== key)
   }
 }
 
-/** 更新内置服务商启用列表 */
-export function setEnabledProviders(enabled: string[]): void {
-  state.providerSettings = {
-    ...state.providerSettings,
-    enabled
-  }
-}
-
-/** 更新内置服务商颜色 */
-export function setBuiltInProviderColor(key: string, color: { dark: string; light: string }): void {
-  const builtIn = state.providerSettings.builtIn.map(p =>
-    p.key === key ? { ...p, color } : p
-  )
-  state.providerSettings = {
-    ...state.providerSettings,
-    builtIn
-  }
-}
-
-/** 更新自定义服务商（按 key 定位，理由同 removeCustomProvider） */
-export function updateCustomProvider(key: string, updates: Partial<{ name: string; url: string; icon: string | null; color: { dark: string; light: string } }>): void {
-  const custom = state.providerSettings.custom.map(p =>
+/** 更新网页应用（按 key 定位，理由同 removeWebApp） */
+export function updateWebApp(key: string, updates: Partial<WebAppInfo>): void {
+  const webApps = state.webAppSettings.webApps.map(p =>
     p.key === key ? { ...p, ...updates } : p
   )
-  state.providerSettings = {
-    ...state.providerSettings,
-    custom
+  state.webAppSettings = {
+    ...state.webAppSettings,
+    webApps
   }
+}
+
+/** 更新全局应用设置 */
+export function updateAppSettings(patch: Partial<AppSettings>): void {
+  state.webAppSettings = {
+    ...state.webAppSettings,
+    appSettings: { ...state.webAppSettings.appSettings, ...patch }
+  }
+}
+
+// ===== 通知收件箱 =====
+export function setNotifications(list: NotificationItem[]): void {
+  state.notifications = Object.freeze([...list])
+}
+
+export function addNotification(item: NotificationItem): void {
+  state.notifications = Object.freeze([item, ...state.notifications])
+}
+
+/** 标记已读（全部/应用/单条） */
+export function markNotificationsRead(scope: NotificationReadScope): void {
+  state.notifications = Object.freeze(
+    state.notifications.map(i => {
+      const hit = scope.all || (scope.app !== undefined && i.appKey === scope.app) || (scope.id !== undefined && i.id === scope.id)
+      return hit && !i.read ? { ...i, read: true } : i
+    })
+  )
+}
+
+export function clearNotifications(scope: NotificationReadScope): void {
+  state.notifications = Object.freeze(
+    scope.all ? [] : scope.app !== undefined
+      ? state.notifications.filter(i => i.appKey !== scope.app)
+      : state.notifications
+  )
+}
+
+export function unreadCount(): number {
+  return state.notifications.filter(i => !i.read).length
+}
+
+/** 每应用未读数 */
+export function unreadByApp(): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const i of state.notifications) {
+    if (!i.read) m.set(i.appKey, (m.get(i.appKey) ?? 0) + 1)
+  }
+  return m
 }

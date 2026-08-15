@@ -1,13 +1,15 @@
 import './style.css'
-import { getState, setCurrentProvider, updateProviders, updateProviderSettings, setSwitchShortcut } from './state'
-import { renderProviderList, saveProviderOrderFromDOM } from './providers/manager'
+import {
+  setCurrentWebApp, updateWebApps, updateWebAppSettings, setSwitchShortcut
+} from './state'
+import { renderWebAppList, saveWebAppOrderFromDOM } from './providers/manager'
 import { initToast, toast } from './ui/toast'
 import { Theme } from './ui/theme'
-import { initLoading, hideLoading, showStatus } from './ui/loading'
-import { initNav, renderNav, setupLoadingListener, setupProviderUpdateListener } from './ui/nav'
+import { initLoading, hideLoading, showLoading, showStatus } from './ui/loading'
+import { initNav, renderNav, setupLoadingListener, setupWebAppUpdateListener } from './ui/nav'
 import { setupShortcutRecording } from './ui/shortcuts'
 import { initUpdateBanner, setupUpdateStatusListener } from './ui/update-banner'
-import { initProviderModal } from './ui/provider-modal'
+import { initWebAppModal } from './ui/provider-modal'
 import { FOCUS_NOTIFY_DELAY_MS, RELOAD_COOLDOWN_MS } from './utils/constants'
 import { byIdOrNull } from './utils/dom'
 
@@ -34,7 +36,7 @@ initUpdateBanner(
   byIdOrNull('btnUpdateDismiss')
 )
 
-initProviderModal()
+initWebAppModal()
 
 // ===== Global error handler =====
 window.onerror = () => hideLoading()
@@ -63,16 +65,6 @@ byIdOrNull<HTMLButtonElement>('reloadFrame')?.addEventListener('click', () => {
   setTimeout(() => { reloadCooldown = false }, RELOAD_COOLDOWN_MS)
 })
 
-byIdOrNull<HTMLButtonElement>('pasteClipboard')?.addEventListener('click', async () => {
-  const btn = byIdOrNull<HTMLButtonElement>('pasteClipboard')
-  if (!btn || btn.disabled) return
-  btn.disabled = true
-  const result = await window.electronAPI.injectClipboard()
-  btn.disabled = false
-  if (result.ok) toast('已粘贴剪贴板内容')
-  else toast(result.error || '粘贴失败')
-})
-
 byIdOrNull<HTMLButtonElement>('toggleFocus')?.addEventListener('click', e => {
   e.stopPropagation()
   toggleFocus()
@@ -97,9 +89,9 @@ function refreshSettings(): void {
     const hint = byIdOrNull<HTMLElement>('settingsThemeHint')
     if (hint) hint.textContent = isDark ? '暗色' : '亮色'
   }
-  window.electronAPI.getProviderSettings().then(s => {
-    updateProviderSettings(s)
-    document.dispatchEvent(new CustomEvent('settings-refresh-providers'))
+  window.electronAPI.getWebAppSettings().then(s => {
+    updateWebAppSettings(s)
+    document.dispatchEvent(new CustomEvent('settings-refresh-webapps'))
   })
 }
 
@@ -121,6 +113,21 @@ settingsTheme?.addEventListener('click', () => {
     settingsTheme.classList.toggle('on', isDark)
     const hint = byIdOrNull<HTMLElement>('settingsThemeHint')
     if (hint) hint.textContent = isDark ? '暗色' : '亮色'
+  }
+})
+
+// 数据导出/导入
+byIdOrNull<HTMLButtonElement>('btnExportData')?.addEventListener('click', async () => {
+  const r = await window.electronAPI.exportData()
+  toast(r.ok ? '配置已导出' : (r.error || '导出失败'))
+})
+byIdOrNull<HTMLButtonElement>('btnImportData')?.addEventListener('click', async () => {
+  const r = await window.electronAPI.importData()
+  if (r.ok) {
+    toast('配置已导入')
+    refreshSettings()
+  } else {
+    toast(r.error || '导入失败')
   }
 })
 
@@ -165,32 +172,39 @@ byIdOrNull<HTMLButtonElement>('btnCheckUpdate')?.addEventListener('click', async
   btn.disabled = false
 })
 
-// ===== Provider settings refresh listener =====
-document.addEventListener('settings-refresh-providers', () => {
-  window.electronAPI.getProviderSettings().then(s => {
-    updateProviderSettings(s)
-    document.dispatchEvent(new CustomEvent('provider-settings-changed'))
+// ===== Settings refresh listeners =====
+document.addEventListener('settings-refresh-webapps', () => {
+  window.electronAPI.getWebAppSettings().then(s => {
+    updateWebAppSettings(s)
+    document.dispatchEvent(new CustomEvent('webapp-settings-changed'))
   })
 })
 
-document.addEventListener('provider-settings-changed', () => {
-  // 通知 manager 重新渲染
-  renderProviderList()
-  saveProviderOrderFromDOM()
+document.addEventListener('webapp-settings-changed', () => {
+  renderWebAppList()
+  saveWebAppOrderFromDOM()
 })
 
 // ===== IPC Events =====
 setupLoadingListener()
-setupProviderUpdateListener()
+setupWebAppUpdateListener()
 setupUpdateStatusListener()
+
+window.electronAPI.onLoading(data => {
+  const { app, status } = data as { app: string; status: 'loading' | 'loaded' | 'error' | 'starting' }
+  if (status === 'starting') showLoading('正在启动本地服务…')
+  else if (status === 'loading') showLoading('正在加载…')
+  else hideLoading()
+  void app
+})
 
 window.electronAPI.onModeChange(mode => {
   document.body.dataset.mode = mode
 })
 
-window.electronAPI.onCurrentProviderChanged(key => {
-  setCurrentProvider(key)
-  renderNav(getState().providerStatus)
+window.electronAPI.onCurrentWebAppChanged(key => {
+  setCurrentWebApp(key)
+  renderNav()
 })
 
 window.electronAPI.onSidebarColor(color => {
@@ -202,8 +216,8 @@ window.electronAPI.onExitFocusMode(() => syncFocusUI(false))
 
 // ===== Init =====
 async function init(): Promise<void> {
-  updateProviders(await window.electronAPI.getProviders())
-  setCurrentProvider(await window.electronAPI.getCurrentProvider())
+  updateWebApps(await window.electronAPI.getWebApps())
+  setCurrentWebApp(await window.electronAPI.getCurrentWebApp())
   const mode = await window.electronAPI.getMode()
   document.body.dataset.mode = mode
 
@@ -211,7 +225,7 @@ async function init(): Promise<void> {
   const verEl = byIdOrNull<HTMLElement>('appVersion')
   if (verEl) verEl.textContent = `v${version}`
 
-  renderNav(getState().providerStatus)
+  renderNav()
   Theme.apply()
   Theme.listenSystemTheme()
   const ss = await window.electronAPI.getSwitchShortcut()

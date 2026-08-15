@@ -77,6 +77,7 @@ html, body {
   background: var(--surface);
   position: relative;
   z-index: 10;
+  grid-row: 1 / -1;
   -webkit-app-region: drag;
   transition: width 250ms cubic-bezier(0.4, 0, 0.2, 1),
               padding 250ms cubic-bezier(0.4, 0, 0.2, 1),
@@ -217,6 +218,7 @@ html, body {
   display: grid;
   place-items: center;
   font-size: 14px;
+  position: relative; /* 通知角标定位 */
   transition: all var(--transition-fast);
   -webkit-app-region: no-drag;
 }
@@ -755,37 +757,42 @@ body.focus .settings-page {
   background: var(--hover-bg);
 }
 
-/* 添加服务商弹窗 */
-.modal-overlay {
+/* 添加/编辑网页应用：右侧抽屉 */
+.drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.35);
   z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   opacity: 0;
   visibility: hidden;
   transition: opacity 200ms ease, visibility 0ms 200ms;
 }
-.modal-overlay.visible {
+.drawer-overlay.visible {
   opacity: 1;
   visibility: visible;
   transition: opacity 200ms ease, visibility 0ms;
 }
-.modal {
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 92vw;
   background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  width: 380px;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-  transform: scale(0.95);
-  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -16px 0 40px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.modal-overlay.visible .modal {
-  transform: scale(1);
+.drawer-overlay.visible .drawer {
+  transform: translateX(0);
+}
+.drawer .modal-body {
+  flex: 1;
+  overflow-y: auto;
 }
 .modal-header {
   display: flex;
@@ -1029,8 +1036,82 @@ body.focus .settings-page {
     transition-duration: 0.01ms !important;
   }
   .settings-page,
-  .modal-overlay,
-  .modal {
+  .drawer-overlay,
+  .drawer {
     transition: none !important;
   }
 }
+
+/* ===== WebApp 管理列表 ===== */
+.webapp-list { display: flex; flex-direction: column; }
+.webapp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: default;
+  user-select: none;
+}
+.webapp-item + .webapp-item { margin-top: 6px; }
+.webapp-item img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.webapp-item .provider-item-info { flex: 1; min-width: 0; }
+.webapp-item .provider-item-url {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.webapp-item.dragging { opacity: 0.6; }
+.webapp-item.drag-over { border-top: 2px solid var(--accent); }
+
+/* 本地服务状态点与按钮 */
+.webapp-service-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--faint);
+}
+.webapp-service-dot.running { background: #30d158; }
+.webapp-service-dot.stopped { background: #ff9f0a; }
+.webapp-service-dot.unknown { background: var(--faint); }
+.webapp-service-btn { white-space: nowrap; }
+
+/* 设置行按钮组 */
+.settings-row-btns { display: flex; gap: 6px; }
+
+/* ===== Modal 新分组 ===== */
+.modal-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 18px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.modal-section-title:first-of-type { border-top: none; }
+.modal-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.modal-check-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.modal-check-row label { cursor: pointer; }

@@ -1,7 +1,7 @@
 {
-  "name": "mineai-hub",
-  "version": "1.0.4",
-  "description": "AI 服务聚合桌面应用",
+  "name": "webdock",
+  "version": "2.0.0",
+  "description": "把任意网页和本地服务变成原生桌面应用",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "lint": "eslint electron/ src/ types/",
     "lint:fix": "eslint electron/ src/ types/ --fix",
-    "format": "prettier --write electron/ src/ types/"
+    "format": "prettier --write electron/ src/ types/",
+    "icons": "electron --user-data-dir=/tmp/webdock-icon-render scripts/render-app-icon.cjs"
   },
   "author": "",
   "license": "MIT",

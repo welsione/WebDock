@@ -14,29 +14,38 @@ let savedBounds: { x: number; y: number; width: number; height: number } | null 
 let currentTheme = 'dark'
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let boundsSaveTimer: ReturnType<typeof setTimeout> | null = null
+/** 应用是否正在退出（before-quit 置位；为 true 时窗口 close 放行，否则隐藏） */
+let isQuitting = false
+
+export function setQuittingFlag(v: boolean): void {
+  isQuitting = v
+}
 
 // ===== 外部回调 =====
 let updateBrowserViewBoundsFn: (() => void) | null = null
 let saveWindowBoundsFn: (() => void) | null = null
-let switchProviderFn: ((key: string) => void) | null = null
-let getCurrentProviderKeyFn: (() => string) | null = null
+let switchWebAppFn: ((key: string) => void) | null = null
+let getCurrentWebAppKeyFn: (() => string) | null = null
 let hasViewFn: ((key: string) => boolean) | null = null
+let attachViewFn: ((key: string) => void) | null = null
 let onWindowCloseFn: (() => void) | null = null
 
 // ===== 初始化回调注入 =====
 export function initWindowManager(deps: {
   updateBrowserViewBounds: () => void
   saveWindowBounds: () => void
-  switchProvider: (key: string) => void
-  getCurrentProviderKey: () => string
+  switchWebApp: (key: string) => void
+  getCurrentWebAppKey: () => string
   hasView: (key: string) => boolean
+  attachView: (key: string) => void
   onWindowClose: () => void
 }): void {
   updateBrowserViewBoundsFn = deps.updateBrowserViewBounds
   saveWindowBoundsFn = deps.saveWindowBounds
-  switchProviderFn = deps.switchProvider
-  getCurrentProviderKeyFn = deps.getCurrentProviderKey
+  switchWebAppFn = deps.switchWebApp
+  getCurrentWebAppKeyFn = deps.getCurrentWebAppKey
   hasViewFn = deps.hasView
+  attachViewFn = deps.attachView
   onWindowCloseFn = deps.onWindowClose
 }
 
@@ -104,9 +113,8 @@ export function createMainWindow(): void {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
-  if (!app.isPackaged) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
-  }
+  // 开发模式不再自动打开 DevTools（Autofill 等 Chromium 噪音日志来源）；
+  // 需要时用菜单「开发 → 打开主窗口 DevTools」或 Cmd+Option+I
 
   mainWindow.once('ready-to-show', () => {
     mainWindow!.show()
@@ -132,8 +140,14 @@ export function createMainWindow(): void {
   mainWindow.on('resize', scheduleBoundsSave)
   mainWindow.on('move', scheduleBoundsSave)
 
-  mainWindow.on('close', () => {
+  // 点红点 = 隐藏窗口（macOS 惯例，页面与登录态原样保留，重新打开零加载）；
+  // 真正退出（Cmd+Q）前 main.ts 会置 quitting 标志，此时放行关闭
+  mainWindow.on('close', (e) => {
     destroyEdgeWindow()
+    if (!isQuitting) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -151,9 +165,12 @@ export function showMainWindow(): void {
   mainWindow!.show()
   mainWindow!.focus()
 
-  if (switchProviderFn && getCurrentProviderKeyFn && hasViewFn) {
-    if (!hasViewFn(getCurrentProviderKeyFn())) {
-      switchProviderFn(getCurrentProviderKeyFn())
+  if (switchWebAppFn && getCurrentWebAppKeyFn && hasViewFn) {
+    if (hasViewFn(getCurrentWebAppKeyFn())) {
+      // view 已存在（隐藏/重建窗口场景）：直接挂载，不重新加载页面
+      if (attachViewFn) attachViewFn(getCurrentWebAppKeyFn())
+    } else {
+      switchWebAppFn(getCurrentWebAppKeyFn())
     }
   }
 }
@@ -266,5 +283,12 @@ export function sendEdgeThemeChange(theme: string): void {
 export function setWindowButtonVisibility(visible: boolean): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setWindowButtonVisibility(visible)
+  }
+}
+
+// ===== 设置主窗口标题 =====
+export function setMainWindowTitle(title: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setTitle(title)
   }
 }

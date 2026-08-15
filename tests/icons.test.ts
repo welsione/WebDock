@@ -89,9 +89,13 @@ describe('dataUrlToNativeImage', () => {
 })
 
 describe('fetchFavicon', () => {
+  function imageResponse(contentType = 'image/x-icon'): { ok: boolean; headers: { get: (n: string) => string }; arrayBuffer: () => Promise<ArrayBuffer> } {
+    return { ok: true, headers: { get: (n: string) => (n === 'content-type' ? contentType : '') }, arrayBuffer: async () => new ArrayBuffer(8) }
+  }
+
   it('从 URL origin 拼接 /favicon.ico 并返回 data URL', async () => {
     const { fetchFavicon } = await loadIcons()
-    const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))
+    const fetchMock = vi.fn(async () => imageResponse())
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await fetchFavicon('https://example.com/chat/page')
@@ -99,9 +103,50 @@ describe('fetchFavicon', () => {
     expect(result).toBe('data:image/png;base64,QUJD')
   })
 
+  it('favicon 响应是 HTML 时返回 null（不把网页当图标）', async () => {
+    const { fetchFavicon } = await loadIcons()
+    vi.stubGlobal('fetch', vi.fn(async () => imageResponse('text/html; charset=utf-8')))
+    expect(await fetchFavicon('https://example.com')).toBeNull()
+  })
+
+  it('SVG favicon 返回 data:image/svg+xml（不走 nativeImage——createFromBuffer 不支持 SVG）', async () => {
+    const { fetchFavicon } = await loadIcons()
+    createFromBufferMock.mockClear() // 同一 mock 跨测试共享，先清计数
+    const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><rect width="50" height="50" fill="red"/></svg>'
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      headers: { get: (n: string) => (n === 'content-type' ? 'image/svg+xml' : '') },
+      arrayBuffer: async () => new TextEncoder().encode(svgContent).buffer
+    })))
+    const result = await fetchFavicon('https://example.com')
+    expect(result).toBe(`data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`)
+    // 确认没有调用 createFromBuffer（SVG 走了 data URL 直返路径）
+    expect(createFromBufferMock).not.toHaveBeenCalled()
+  })
+
+  it('.ico 非图片时自动回退尝试 /favicon.svg（本地服务仅提供 svg 图标的场景）', async () => {
+    const { fetchFavicon } = await loadIcons()
+    createFromBufferMock.mockClear()
+    const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><rect width="50" height="50" fill="red"/></svg>'
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      headers: { get: (n: string) => (n === 'content-type' ? (url.endsWith('.svg') ? 'image/svg+xml' : 'text/html') : '') },
+      arrayBuffer: async () => new TextEncoder().encode(svgContent).buffer
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchFavicon('http://127.0.0.1:3080')
+    expect(result).toBe(`data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`)
+    // 先试 favicon.ico（HTML 被拒）→ 再试 favicon.svg
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([
+      'http://127.0.0.1:3080/favicon.ico',
+      'http://127.0.0.1:3080/favicon.svg'
+    ])
+  })
+
   it('响应非 ok 时返回 null', async () => {
     const { fetchFavicon } = await loadIcons()
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, headers: { get: () => '' } })))
     expect(await fetchFavicon('https://example.com')).toBeNull()
   })
 
@@ -129,10 +174,55 @@ describe('fetchIconByUrl', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('合法图标 URL 返回 data URL', async () => {
+  it('URL 本身是图片时直接返回 data URL', async () => {
     const { fetchIconByUrl } = await loadIcons()
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      headers: { get: (n: string) => (n === 'content-type' ? 'image/png' : '') },
+      arrayBuffer: async () => new ArrayBuffer(8)
+    })))
     expect(await fetchIconByUrl('https://example.com/icon.png')).toBe('data:image/png;base64,QUJD')
+  })
+
+  it('URL 返回 HTML 时自动回退请求站点 /favicon.ico', async () => {
+    const { fetchIconByUrl } = await loadIcons()
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      headers: { get: (n: string) => (n === 'content-type' ? (url.includes('/favicon.ico') ? 'image/x-icon' : 'text/html') : '') },
+      arrayBuffer: async () => new ArrayBuffer(8)
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // 用户填服务商主页（HTML），应自动去拉 favicon
+    expect(await fetchIconByUrl('https://example.com')).toBe('data:image/png;base64,QUJD')
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([
+      'https://example.com',
+      'https://example.com/favicon.ico'
+    ])
+  })
+
+  it('URL 与 favicon 都非图片时返回 null（如本地服务首页无图标）', async () => {
+    const { fetchIconByUrl } = await loadIcons()
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      headers: { get: (n: string) => (n === 'content-type' ? 'text/html; charset=utf-8' : '') },
+      arrayBuffer: async () => new ArrayBuffer(8)
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await fetchIconByUrl('http://127.0.0.1:3080')).toBeNull()
+    // 3 次尝试：URL 本身 + /favicon.ico + /favicon.svg
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('URL 请求抛错时回退 favicon；favicon 也失败返回 null', async () => {
+    const { fetchIconByUrl } = await loadIcons()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/favicon.ico')) throw new Error('network down')
+      throw new Error('network down')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await fetchIconByUrl('https://example.com')).toBeNull()
   })
 })
 
@@ -169,3 +259,4 @@ function fetchMockNeverCalled(): boolean {
   const f = vi.mocked(globalThis.fetch)
   return f === undefined || f.mock.calls.length === 0
 }
+

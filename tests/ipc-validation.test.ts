@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
-  sanitizeEnabled, sanitizeCustomProviders, sanitizeOrder,
-  sanitizeBuiltInColors, sanitizeTheme, sanitizeProviderKey,
+  sanitizeEnabled, sanitizeWebApp, sanitizeLaunch, sanitizeAppSettings,
+  sanitizeOrder, sanitizeBuiltInColors, sanitizeTheme, sanitizeWebAppKey,
   sanitizeBoolean, sanitizeNumber
 } from '../electron/ipc-validation'
+
+const DEFAULT_SETTINGS: AppSettings = {
+  notifyDefaultNative: true,
+  audioExclusive: true,
+  viewCacheLimit: 0,
+  clearNotificationsOnQuit: false
+}
 
 describe('sanitizeEnabled', () => {
   it('接受字符串数组', () => {
@@ -24,47 +31,101 @@ describe('sanitizeEnabled', () => {
   })
 })
 
-describe('sanitizeCustomProviders', () => {
-  it('保留合法项', () => {
-    const result = sanitizeCustomProviders([
-      { key: 'c1', name: 'C1', url: 'http://127.0.0.1:11434', icon: 'data:image/png;base64,AA', color: { dark: '#000', light: '#fff' } }
-    ])
-    expect(result).toEqual([
-      { key: 'c1', name: 'C1', url: 'http://127.0.0.1:11434', icon: 'data:image/png;base64,AA', color: { dark: '#000', light: '#fff' } }
-    ])
+describe('sanitizeWebApp', () => {
+  it('保留合法项（含新字段）', () => {
+    const result = sanitizeWebApp({
+      key: 'c1', name: 'C1', url: 'http://127.0.0.1:11434',
+      icon: 'data:image/png;base64,AA',
+      color: { dark: '#000', light: '#fff' },
+      notify: { native: false, titleNotify: true },
+      permissions: { camera: 'allow', microphone: 'deny', geolocation: 'ask' },
+      trustCertificate: true,
+      launch: { command: 'ollama serve', cwd: '/tmp', healthUrl: 'http://127.0.0.1:11434', exitWithApp: true },
+      preset: true
+    })
+    expect(result).toEqual({
+      key: 'c1', name: 'C1', url: 'http://127.0.0.1:11434',
+      icon: 'data:image/png;base64,AA',
+      color: { dark: '#000', light: '#fff' },
+      notify: { native: false, titleNotify: true },
+      permissions: { camera: 'allow', microphone: 'deny', geolocation: 'ask' },
+      trustCertificate: true,
+      launch: { command: 'ollama serve', cwd: '/tmp', healthUrl: 'http://127.0.0.1:11434', exitWithApp: true },
+      preset: true
+    })
   })
-  it('非数组返回空数组', () => {
-    expect(sanitizeCustomProviders(undefined)).toEqual([])
-    expect(sanitizeCustomProviders('x')).toEqual([])
-  })
-  it('key/name/url 缺失或非字符串的项被丢弃', () => {
-    const result = sanitizeCustomProviders([
-      { key: '', name: 'X', url: 'https://x.com' },
-      { key: 'ok', name: 123, url: 'https://x.com' },
-      { key: 'ok2', name: 'X', url: null },
-      null,
-      'junk',
-      { key: 'good', name: 'G', url: 'https://g.com' }
-    ] as unknown as Array<Record<string, unknown>>)
-    expect(result).toEqual([{ key: 'good', name: 'G', url: 'https://g.com' }])
+  it('非对象/缺 key 返回 undefined', () => {
+    expect(sanitizeWebApp(undefined)).toBeUndefined()
+    expect(sanitizeWebApp('x')).toBeUndefined()
+    expect(sanitizeWebApp({ key: '', name: 'X', url: 'https://x.com' })).toBeUndefined()
+    expect(sanitizeWebApp({ key: 'ok', name: 123, url: 'https://x.com' })).toBeUndefined()
+    expect(sanitizeWebApp({ key: 'ok2', name: 'X', url: null })).toBeUndefined()
   })
   it('icon 可选且保留合法值', () => {
-    const result = sanitizeCustomProviders([
-      { key: 'a', name: 'A', url: 'https://a.com', icon: 'data:image/svg+xml;base64,QQ==' },
-      { key: 'b', name: 'B', url: 'https://b.com', icon: 42 }
-    ] as unknown as Array<Record<string, unknown>>)
-    expect(result[0].icon).toBe('data:image/svg+xml;base64,QQ==')
-    expect(result[1].icon).toBeUndefined()
+    const result = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', icon: 'data:image/svg+xml;base64,QQ==' })
+    expect(result?.icon).toBe('data:image/svg+xml;base64,QQ==')
+    const bad = sanitizeWebApp({ key: 'b', name: 'B', url: 'https://b.com', icon: 42 })
+    expect(bad?.icon).toBeUndefined()
   })
   it('color 可选且非法时丢弃', () => {
-    const result = sanitizeCustomProviders([
-      { key: 'a', name: 'A', url: 'https://a.com', color: { dark: '#000', light: '#fff' } },
-      { key: 'b', name: 'B', url: 'https://b.com', color: { dark: '#000' } },
-      { key: 'c', name: 'C', url: 'https://c.com', color: 'red' }
-    ] as unknown as Array<Record<string, unknown>>)
-    expect(result[0].color).toEqual({ dark: '#000', light: '#fff' })
-    expect(result[1].color).toBeUndefined()
-    expect(result[2].color).toBeUndefined()
+    const ok = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', color: { dark: '#000', light: '#fff' } })
+    expect(ok?.color).toEqual({ dark: '#000', light: '#fff' })
+    const bad = sanitizeWebApp({ key: 'b', name: 'B', url: 'https://b.com', color: { dark: '#000' } })
+    expect(bad?.color).toBeUndefined()
+  })
+  it('notify 非法类型丢弃，全默认丢弃', () => {
+    const bad = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', notify: { native: 'yes' } })
+    expect(bad?.notify).toBeUndefined()
+    const defaulted = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', notify: { native: true, titleNotify: false } })
+    expect(defaulted?.notify).toBeUndefined()
+    const partial = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', notify: { titleNotify: true } })
+    expect(partial?.notify).toEqual({ native: true, titleNotify: true })
+  })
+  it('permissions 非法值丢弃整项，全 deny 丢弃', () => {
+    const bad = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', permissions: { camera: 'yes' } })
+    expect(bad?.permissions).toBeUndefined()
+    const allDeny = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', permissions: { camera: 'deny', microphone: 'deny', geolocation: 'deny' } })
+    expect(allDeny?.permissions).toBeUndefined()
+    const ok = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', permissions: { camera: 'allow' } })
+    expect(ok?.permissions).toEqual({ camera: 'allow', microphone: 'deny', geolocation: 'deny' })
+  })
+  it('trustCertificate/preset 严格布尔', () => {
+    const result = sanitizeWebApp({ key: 'a', name: 'A', url: 'https://a.com', trustCertificate: 'yes', preset: 1 })
+    expect(result?.trustCertificate).toBeUndefined()
+    expect(result?.preset).toBeUndefined()
+  })
+})
+
+describe('sanitizeLaunch', () => {
+  it('command 必填非空字符串', () => {
+    expect(sanitizeLaunch({ command: 'dsh web' })).toEqual({ command: 'dsh web' })
+    expect(sanitizeLaunch({})).toBeUndefined()
+    expect(sanitizeLaunch({ command: '' })).toBeUndefined()
+    expect(sanitizeLaunch({ command: 42 })).toBeUndefined()
+    expect(sanitizeLaunch(undefined)).toBeUndefined()
+  })
+  it('cwd/exitWithApp 可选', () => {
+    expect(sanitizeLaunch({ command: 'x', cwd: '/tmp', exitWithApp: true }))
+      .toEqual({ command: 'x', cwd: '/tmp', exitWithApp: true })
+  })
+  it('healthUrl 必须 http/https 可解析，非法丢弃', () => {
+    expect(sanitizeLaunch({ command: 'x', healthUrl: 'http://127.0.0.1:3080' }).healthUrl).toBe('http://127.0.0.1:3080')
+    expect(sanitizeLaunch({ command: 'x', healthUrl: 'ftp://x' }).healthUrl).toBeUndefined()
+    expect(sanitizeLaunch({ command: 'x', healthUrl: 'not a url' }).healthUrl).toBeUndefined()
+  })
+})
+
+describe('sanitizeAppSettings', () => {
+  it('非法/缺失回退默认', () => {
+    expect(sanitizeAppSettings(undefined, DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS)
+    expect(sanitizeAppSettings('x', DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS)
+    expect(sanitizeAppSettings({ notifyDefaultNative: 'yes', audioExclusive: false }, DEFAULT_SETTINGS))
+      .toEqual({ ...DEFAULT_SETTINGS, audioExclusive: false })
+  })
+  it('viewCacheLimit 非负整数', () => {
+    expect(sanitizeAppSettings({ viewCacheLimit: 5.7 }, DEFAULT_SETTINGS).viewCacheLimit).toBe(5)
+    expect(sanitizeAppSettings({ viewCacheLimit: -1 }, DEFAULT_SETTINGS).viewCacheLimit).toBe(0)
+    expect(sanitizeAppSettings({ viewCacheLimit: NaN }, DEFAULT_SETTINGS).viewCacheLimit).toBe(0)
   })
 })
 
@@ -106,12 +167,12 @@ describe('sanitizeTheme', () => {
   })
 })
 
-describe('sanitizeProviderKey', () => {
+describe('sanitizeWebAppKey', () => {
   it('接受非空字符串', () => {
-    expect(sanitizeProviderKey('deepseek')).toBe('deepseek')
-    expect(sanitizeProviderKey('')).toBeNull()
-    expect(sanitizeProviderKey(undefined)).toBeNull()
-    expect(sanitizeProviderKey(123)).toBeNull()
+    expect(sanitizeWebAppKey('deepseek')).toBe('deepseek')
+    expect(sanitizeWebAppKey('')).toBeNull()
+    expect(sanitizeWebAppKey(undefined)).toBeNull()
+    expect(sanitizeWebAppKey(123)).toBeNull()
   })
 })
 

@@ -7,12 +7,12 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --edge-pill: rgba(255, 255, 255, 0.2);
-      --edge-pill-hover: rgba(255, 255, 255, 0.45);
+      --edge-pill: rgba(255, 255, 255, 0.55);
+      --edge-pill-hover: rgba(255, 255, 255, 0.8);
     }
     [data-theme="light"] {
-      --edge-pill: rgba(0, 0, 0, 0.12);
-      --edge-pill-hover: rgba(0, 0, 0, 0.28);
+      --edge-pill: rgba(0, 0, 0, 0.4);
+      --edge-pill-hover: rgba(0, 0, 0, 0.6);
     }
 
     html, body {
@@ -33,6 +33,8 @@
       height: 56px;
       border-radius: 2.5px;
       background: var(--edge-pill);
+      /* 向下柔和阴影：浅色/深色背景下都与桌面分离，避免"隐形" */
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
       transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       cursor: grab;

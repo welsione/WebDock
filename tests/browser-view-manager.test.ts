@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as Bvm from '../electron/browser-view-manager'
 
-// getMergedProviders 依赖 config（模块加载时读真实 assets 图标）与 icons（nativeImage）
+// getMergedWebApps 依赖 config（模块加载时读真实 assets 图标）与 icons（nativeImage）
 // 只 mock electron 的窗口/通知相关类，fs/path 用真实实现（assets 目录真实存在）
 vi.mock('electron', () => ({
   app: { isPackaged: false, getPath: () => '/tmp/mock-userdata' },
@@ -26,95 +26,67 @@ beforeEach(() => {
   vi.resetModules()
 })
 
-describe('getMergedProviders - 默认状态', () => {
-  it('无过滤时返回全部内置服务商，顺序与 PROVIDERS 一致', async () => {
-    const { getMergedProviders } = await loadBvm()
-    const providers = getMergedProviders()
-    expect(providers.length).toBe(7)
-    expect(providers[0].key).toBe('deepseek')
-    expect(providers.map(p => p.key)).toEqual(['deepseek', 'doubao', 'kimi', 'metaso', 'qianwen', 'minimax', 'zhipu'])
-  })
-
-  it('内置服务商 icon 非空且 color 完整', async () => {
-    const { getMergedProviders } = await loadBvm()
-    for (const p of getMergedProviders()) {
-      expect(p.icon).toBeTruthy()
-      expect(p.color.dark).toBeTruthy()
-      expect(p.color.light).toBeTruthy()
-    }
+describe('getMergedWebApps - 默认状态', () => {
+  it('未设置时返回空列表（首启由 main 写入预置模板）', async () => {
+    const { getMergedWebApps } = await loadBvm()
+    expect(getMergedWebApps()).toEqual([])
   })
 })
 
-describe('getMergedProviders - 启用过滤', () => {
-  it('enabledProviders 过滤内置服务商', async () => {
-    const { getMergedProviders, setEnabledProviders } = await loadBvm()
-    setEnabledProviders(['deepseek', 'kimi'])
-    const keys = getMergedProviders().map(p => p.key)
-    expect(keys).toEqual(['deepseek', 'kimi'])
+describe('getMergedWebApps - icon/color 回退', () => {
+  it('缺少 icon 时回退为首字母图标', async () => {
+    const { getMergedWebApps, setWebApps } = await loadBvm()
+    setWebApps([{ key: 'c1', name: 'ChatGPT', url: 'https://chat.openai.com' }])
+    expect(getMergedWebApps()[0].icon).toMatch(/^data:image\/svg\+xml;base64,/)
   })
 
-  it('enabledProviders 为空数组时返回空列表', async () => {
-    const { getMergedProviders, setEnabledProviders } = await loadBvm()
-    setEnabledProviders([])
-    expect(getMergedProviders().length).toBe(0)
-  })
-})
-
-describe('getMergedProviders - 自定义服务商合并', () => {
-  it('自定义服务商追加到内置之后', async () => {
-    const { getMergedProviders, setCustomProviders } = await loadBvm()
-    setCustomProviders([{ key: 'c1', name: 'C1', url: 'https://c1.com', icon: 'data:image/png;base64,XXX' }])
-    const providers = getMergedProviders()
-    expect(providers.length).toBe(8)
-    expect(providers[7]).toMatchObject({ key: 'c1', name: 'C1', url: 'https://c1.com', icon: 'data:image/png;base64,XXX' })
+  it('缺少 color 时回退为默认色', async () => {
+    const { getMergedWebApps, setWebApps } = await loadBvm()
+    setWebApps([{ key: 'c1', name: 'C1', url: 'https://c1.com' }])
+    expect(getMergedWebApps()[0].color).toEqual({ dark: '#1a1e28', light: '#f0f2f5' })
   })
 
-  it('自定义服务商缺少 icon 时回退为首字母图标', async () => {
-    const { getMergedProviders, setCustomProviders } = await loadBvm()
-    setCustomProviders([{ key: 'c1', name: 'ChatGPT', url: 'https://chat.openai.com' }])
-    const providers = getMergedProviders()
-    expect(providers[7].icon).toMatch(/^data:image\/svg\+xml;base64,/)
-  })
-
-  it('自定义服务商缺少 color 时回退为默认色', async () => {
-    const { getMergedProviders, setCustomProviders } = await loadBvm()
-    setCustomProviders([{ key: 'c1', name: 'C1', url: 'https://c1.com' }])
-    expect(getMergedProviders()[7].color).toEqual({ dark: '#1a1e28', light: '#f0f2f5' })
-  })
-
-  it('自定义服务商保留自己的 color', async () => {
-    const { getMergedProviders, setCustomProviders } = await loadBvm()
-    setCustomProviders([{ key: 'c1', name: 'C1', url: 'https://c1.com', color: { dark: '#111', light: '#eee' } }])
-    expect(getMergedProviders()[7].color).toEqual({ dark: '#111', light: '#eee' })
+  it('保留自定义 icon/color/notify/launch 等字段', async () => {
+    const { getMergedWebApps, setWebApps } = await loadBvm()
+    setWebApps([{
+      key: 'c1', name: 'C1', url: 'https://c1.com',
+      icon: 'data:image/png;base64,XXX',
+      color: { dark: '#111', light: '#eee' },
+      notify: { native: false, titleNotify: true },
+      launch: { command: 'dsh web' },
+      trustCertificate: true,
+      preset: true
+    }])
+    const app = getMergedWebApps()[0]
+    expect(app).toMatchObject({
+      key: 'c1', name: 'C1', url: 'https://c1.com',
+      icon: 'data:image/png;base64,XXX',
+      color: { dark: '#111', light: '#eee' },
+      notify: { native: false, titleNotify: true },
+      launch: { command: 'dsh web' },
+      trustCertificate: true,
+      preset: true
+    })
   })
 })
 
-describe('getMergedProviders - 排序', () => {
-  it('providerOrder 生效，未出现的 key 排最后', async () => {
-    const { getMergedProviders, setProviderOrder } = await loadBvm()
-    setProviderOrder(['kimi', 'deepseek', 'nonexistent'])
-    const keys = getMergedProviders().map(p => p.key)
-    expect(keys[0]).toBe('kimi')
-    expect(keys[1]).toBe('deepseek')
-    // 'nonexistent' 不在列表中；其余按默认顺序排在最后
-    expect(keys.slice(2)).toEqual(['doubao', 'metaso', 'qianwen', 'minimax', 'zhipu'])
-  })
-
-  it('自定义服务商参与排序', async () => {
-    const { getMergedProviders, setProviderOrder, setCustomProviders } = await loadBvm()
-    setCustomProviders([{ key: 'c1', name: 'C1', url: 'https://c1.com' }])
-    setProviderOrder(['c1', 'deepseek'])
-    const keys = getMergedProviders().map(p => p.key)
-    expect(keys[0]).toBe('c1')
-    expect(keys[1]).toBe('deepseek')
+describe('getMergedWebApps - 列表顺序', () => {
+  it('保持 setWebApps 传入顺序（排序由调用方负责）', async () => {
+    const { getMergedWebApps, setWebApps } = await loadBvm()
+    setWebApps([
+      { key: 'b', name: 'B', url: 'https://b.com' },
+      { key: 'a', name: 'A', url: 'https://a.com' }
+    ])
+    expect(getMergedWebApps().map(p => p.key)).toEqual(['b', 'a'])
   })
 })
 
-describe('getMergedProviders - 内置颜色覆盖', () => {
-  it('builtInColors 覆盖内置服务商颜色', async () => {
-    const { getMergedProviders, setBuiltInColors } = await loadBvm()
-    setBuiltInColors({ deepseek: { dark: '#123456', light: '#abcdef' } })
-    const deepseek = getMergedProviders().find(p => p.key === 'deepseek')!
-    expect(deepseek.color).toEqual({ dark: '#123456', light: '#abcdef' })
+describe('getPresetWebApps - 预置模板', () => {
+  it('返回 7 个预置且均带 preset 标记', async () => {
+    const { getPresetWebApps } = await loadBvm()
+    const presets = getPresetWebApps()
+    expect(presets.length).toBe(7)
+    expect(presets.every(p => p.preset === true)).toBe(true)
+    expect(presets[0].key).toBe('deepseek')
   })
 })

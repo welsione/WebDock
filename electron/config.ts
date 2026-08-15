@@ -21,28 +21,15 @@ function loadIcon(name: string): string {
   }
 }
 
-// ===== Providers =====
-interface ProviderColor {
-  dark: string
-  light: string
-}
-
-interface Provider {
-  key: string
-  name: string
-  url: string
-  icon: string
-  color: ProviderColor
-}
-
-const PROVIDERS: Provider[] = [
-  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png'), color: { dark: '#151517', light: '#ffffff' } },
-  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png'), color: { dark: '#1f1f1f', light: '#f9f9f9' } },
-  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png'), color: { dark: '#151616', light: '#ffffff' } },
-  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png'), color: { dark: '#16181e', light: '#fbfbfa' } },
-  { key: 'qianwen',  name: '千问',     url: 'https://www.qianwen.com/',      icon: loadIcon('qianwen.png'), color: { dark: '#111112', light: '#f7f7f9' } },
-  { key: 'minimax',  name: 'MiniMax',  url: 'https://agent.minimaxi.com/',   icon: loadIcon('minimax.png'), color: { dark: '#171717', light: '#ffffff' } },
-  { key: 'zhipu',    name: '智谱',     url: 'https://chat.z.ai/',            icon: loadIcon('zhipu.png'), color: { dark: '#161616', light: '#f8f8f8' } }
+// ===== 预置网页应用（可编辑/删除，与自定义完全同构） =====
+const PRESET_WEB_APPS: WebAppInfo[] = [
+  { key: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', icon: loadIcon('deepseek.png'), color: { dark: '#151517', light: '#ffffff' }, preset: true },
+  { key: 'doubao',   name: '豆包',     url: 'https://www.doubao.com/chat/',  icon: loadIcon('doubao.png'), color: { dark: '#1f1f1f', light: '#f9f9f9' }, preset: true },
+  { key: 'kimi',     name: 'Kimi',     url: 'https://kimi.moonshot.cn/',     icon: loadIcon('kimi.png'), color: { dark: '#151616', light: '#ffffff' }, preset: true },
+  { key: 'metaso',   name: 'Metaso',   url: 'https://metaso.cn/',            icon: loadIcon('metaso.png'), color: { dark: '#16181e', light: '#fbfbfa' }, preset: true },
+  { key: 'qianwen',  name: '千问',     url: 'https://www.qianwen.com/',      icon: loadIcon('qianwen.png'), color: { dark: '#111112', light: '#f7f7f9' }, preset: true },
+  { key: 'minimax',  name: 'MiniMax',  url: 'https://agent.minimaxi.com/',   icon: loadIcon('minimax.png'), color: { dark: '#171717', light: '#ffffff' }, preset: true },
+  { key: 'zhipu',    name: '智谱',     url: 'https://chat.z.ai/',            icon: loadIcon('zhipu.png'), color: { dark: '#161616', light: '#f8f8f8' }, preset: true }
 ]
 
 // 不遵循 prefers-color-scheme 的服务需要注入 localStorage 后重载
@@ -66,6 +53,20 @@ const HTML_ICONS_TIMEOUT_MS = 5000      // HTML 解析图标超时
 const BOUNDS_SAVE_DELAY_MS = 500        // 窗口位置保存延迟
 const RESIZE_UPDATE_DELAY_MS = 16       // 窗口大小更新延迟（约 60fps）
 const NOTIFY_ICON_CLEANUP_MS = 60000    // 通知图标清理阈值（1 分钟）
+const PAGE_TITLE_SYNC_DEBOUNCE_MS = 500 // 窗口标题同步防抖
+
+// ===== 本地服务拉起 =====
+const HEALTH_CHECK_TIMEOUT_MS = 3000    // 健康检查单次超时
+const HEALTH_POLL_INTERVAL_MS = 500     // 拉起后健康轮询间隔
+const LAUNCH_WAIT_TIMEOUT_MS = 30000    // 拉起等待总超时
+
+// ===== 通知收件箱 =====
+const NOTIFY_MAX_HISTORY = 500          // 通知历史上限（环形缓冲）
+const NOTIFY_TITLE_MAX = 100            // title 截断长度
+const NOTIFY_BODY_MAX = 500             // body 截断长度
+const NOTIFY_RATE_PER_MIN = 10          // 每应用每分钟入列上限
+const TITLE_NOTIFY_DEBOUNCE_MS = 2000   // 标题通知防抖（2s 内合并）
+const TITLE_NOTIFY_RATE_PER_MIN = 2     // 标题通知每应用每分钟上限
 
 // ===== Theme Scripts =====
 const THEME_KEYS = JSON.stringify(['theme','darkMode','theme-mode','app_theme','THEME_MODE','arco-theme','themeType','byte_theme'])
@@ -79,13 +80,11 @@ const THEME_SCRIPTS: Record<string, string> = {
   light: buildThemeScript('light')
 }
 
-// ===== Notification Bridge =====
-// 拦截页面内的 Notification API，通过 console.log 桥接回主进程，转发为原生通知
-// 接受 providerKey 和 icon 参数，直接嵌入到桥接消息中，避免主进程反查 webContents
-function buildNotifyBridge(providerKey: string, icon: string): string {
-  const safeKey = JSON.stringify(providerKey)
-  const safeIcon = JSON.stringify(icon)
-  return `(function(){var O=window.Notification;var PREFIX='__MINEAI_NOTIFY__:';var KEY=${safeKey};var ICO=${safeIcon};window.Notification=function(t,o){try{console.log(PREFIX+JSON.stringify({title:t,body:o&&o.body||'',icon:o&&o.icon||'',tag:o&&o.tag||'',_key:KEY,_ico:ICO}))}catch(e){}return new O(t,o)};Object.keys(O).forEach(function(k){try{window.Notification[k]=O[k]}catch(e){}});window.Notification.prototype=O.prototype;window.Notification.requestPermission=function(cb){var p=Promise.resolve('granted');if(cb){cb('granted')}return p}})()`
+// ===== Notification Hook =====
+// 拦截页面内的 Notification API，通过 window.postMessage 交给 bridge-preload
+// 转发到主进程（来源由主进程按 webContents 反查，页面无法伪造 appKey）。
+function buildNotifyHook(): string {
+  return `(function(){var O=window.Notification;window.Notification=function(t,o){try{window.postMessage({type:'__MINEAI_NOTIFY__',payload:{title:t,body:o&&o.body||'',icon:o&&o.icon||''}},'*')}catch(e){}return new O(t,o)};Object.keys(O).forEach(function(k){try{window.Notification[k]=O[k]}catch(e){}});window.Notification.prototype=O.prototype;window.Notification.requestPermission=function(cb){var p=Promise.resolve('granted');if(cb){cb('granted')}return p}})()`
 }
 
 // ===== Shortcut Matching =====
@@ -127,7 +126,7 @@ function matchesKeyEvent(input: KeyEvent, shortcutStr: string): boolean {
 }
 
 export {
-  PROVIDERS,
+  PRESET_WEB_APPS,
   NEEDS_THEME_RELOAD,
   MODE,
   SIDEBAR_WIDTH,
@@ -137,7 +136,7 @@ export {
   POPUP_WIDTH,
   POPUP_HEIGHT,
   THEME_SCRIPTS,
-  buildNotifyBridge,
+  buildNotifyHook,
   parseShortcut,
   matchesKeyEvent,
   // Timing constants
@@ -148,7 +147,17 @@ export {
   HTML_ICONS_TIMEOUT_MS,
   BOUNDS_SAVE_DELAY_MS,
   RESIZE_UPDATE_DELAY_MS,
-  NOTIFY_ICON_CLEANUP_MS
+  NOTIFY_ICON_CLEANUP_MS,
+  PAGE_TITLE_SYNC_DEBOUNCE_MS,
+  // 本地服务拉起
+  HEALTH_CHECK_TIMEOUT_MS,
+  HEALTH_POLL_INTERVAL_MS,
+  LAUNCH_WAIT_TIMEOUT_MS,
+  // 通知收件箱
+  NOTIFY_MAX_HISTORY,
+  NOTIFY_TITLE_MAX,
+  NOTIFY_BODY_MAX,
+  NOTIFY_RATE_PER_MIN,
+  TITLE_NOTIFY_DEBOUNCE_MS,
+  TITLE_NOTIFY_RATE_PER_MIN
 }
-
-export type { Provider, ProviderColor, KeyEvent }

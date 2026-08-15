@@ -2,14 +2,14 @@
 // 负责构建 macOS 应用菜单
 
 import { app, Menu } from 'electron'
-import { getMergedProviders, getCurrentProviderKey, switchProvider, getCurrentView } from './browser-view-manager'
+import { getMergedWebApps, getCurrentWebAppKey, switchWebApp, getCurrentView } from './browser-view-manager'
 import { showMainWindow, getMainWindowRef } from './window-manager'
 import { showNativeNotification } from './notification-bridge'
 
 export function buildMenu(): void {
   const isDev = !app.isPackaged
   const base: Electron.MenuItemConstructorOptions[] = [
-    { label: 'MineAI Hub', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'WebDock', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: '视图', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'close' }] }
@@ -19,7 +19,7 @@ export function buildMenu(): void {
       label: '开发',
       submenu: [
         {
-          label: '打开 BrowserView DevTools',
+          label: '打开网页应用 DevTools',
           accelerator: 'CmdOrCtrl+Shift+I',
           click: () => {
             const v = getCurrentView()
@@ -37,12 +37,12 @@ export function buildMenu(): void {
         {
           label: '发送测试通知',
           click: () => {
-            const p = getMergedProviders().find(x => x.key === getCurrentProviderKey())
+            const p = getMergedWebApps().find(x => x.key === getCurrentWebAppKey())
             if (p) {
-              void showNativeNotification(
-                `${p.name} — 测试通知`, '来自 MineAI 的测试消息',
-                p.icon, p.key, switchProvider, showMainWindow
-              )
+              void showNativeNotification(`${p.name} — 测试通知`, '来自 WebDock 的测试消息', p.icon, () => {
+                void switchWebApp(p.key)
+                showMainWindow()
+              })
             }
           }
         }

@@ -97,10 +97,18 @@ describe('settings-store - loadSettings', () => {
 })
 
 describe('settings-store - 失败降级', () => {
-  it('写入失败时 promise 不 reject（内部吞错）', async () => {
+  it('写入失败时不 reject，返回 { ok: false } 向上暴露', async () => {
     const { saveSettings } = await loadStore()
     // 删除目录使写入失败
     fs.rmSync(testDir, { recursive: true, force: true })
-    await expect(saveSettings({ shortcut: 'Cmd+X' })).resolves.toBeUndefined()
+    const result = await saveSettings({ shortcut: 'Cmd+X' })
+    expect(result.ok).toBe(false)
+    expect(result.error).toBeTruthy()
+  })
+
+  it('写入成功返回 { ok: true }', async () => {
+    const { saveSettings } = await loadStore()
+    const result = await saveSettings({ shortcut: 'Cmd+X' })
+    expect(result.ok).toBe(true)
   })
 })
