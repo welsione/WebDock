@@ -27,6 +27,13 @@
       user-select: none;
     }
 
+    /* 淡出：主进程销毁前发送 edge-fade-out，edge.ts 添加 .fading；
+       默认保持可见（不设 opacity:0，避免个别环境 CSS 动画不推进导致竖条不可见） */
+    body.fading {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
     /* 悬浮腰圆条 */
     .pill {
       width: 6px;

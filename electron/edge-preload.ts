@@ -4,6 +4,8 @@ interface EdgeAPI {
   exitFocus: () => void
   moveWindow: (dx: number, dy: number) => void
   onThemeChange: (callback: (theme: string) => void) => void
+  onShow: (callback: () => void) => void
+  onFadeOut: (callback: () => void) => void
 }
 
 // 单次监听辅助：先移除旧 listener 再注册新的，防止累积
@@ -15,5 +17,7 @@ function onceOn(channel: string, callback: (...args: unknown[]) => void): void {
 contextBridge.exposeInMainWorld('edgeAPI', {
   exitFocus: () => ipcRenderer.send('exit-focus'),
   moveWindow: (dx: number, dy: number) => ipcRenderer.send('move-window', dx, dy),
-  onThemeChange: (callback: (theme: string) => void) => onceOn('edge-theme-changed', (theme) => callback(theme as string))
+  onThemeChange: (callback: (theme: string) => void) => onceOn('edge-theme-changed', (theme) => callback(theme as string)),
+  onShow: (callback: () => void) => onceOn('edge-show', () => callback()),
+  onFadeOut: (callback: () => void) => onceOn('edge-fade-out', () => callback())
 } satisfies EdgeAPI)

@@ -52,6 +52,7 @@ const ICON_FETCH_TIMEOUT_MS = 3000      // 图标获取超时
 const HTML_ICONS_TIMEOUT_MS = 5000      // HTML 解析图标超时
 const BOUNDS_SAVE_DELAY_MS = 500        // 窗口位置保存延迟
 const RESIZE_UPDATE_DELAY_MS = 16       // 窗口大小更新延迟（约 60fps）
+const EDGE_FADE_MS = 260                // 边缘条淡出后销毁的兜底延迟（CSS 渐变 150ms）
 const NOTIFY_ICON_CLEANUP_MS = 60000    // 通知图标清理阈值（1 分钟）
 const PAGE_TITLE_SYNC_DEBOUNCE_MS = 500 // 窗口标题同步防抖
 
@@ -147,6 +148,7 @@ export {
   HTML_ICONS_TIMEOUT_MS,
   BOUNDS_SAVE_DELAY_MS,
   RESIZE_UPDATE_DELAY_MS,
+  EDGE_FADE_MS,
   NOTIFY_ICON_CLEANUP_MS,
   PAGE_TITLE_SYNC_DEBOUNCE_MS,
   // 本地服务拉起

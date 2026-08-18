@@ -130,6 +130,8 @@ interface EdgeAPI {
   exitFocus: () => void
   moveWindow: (dx: number, dy: number) => void
   onThemeChange: (callback: (theme: string) => void) => void
+  onShow: (callback: () => void) => void
+  onFadeOut: (callback: () => void) => void
 }
 
 interface Window {

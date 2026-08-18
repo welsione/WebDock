@@ -3,6 +3,7 @@
 
 import { app, ipcMain, nativeTheme, dialog, BrowserWindow } from 'electron'
 import fs from 'fs'
+import log from 'electron-log'
 import { MODE } from './config'
 import { fetchFavicon, fetchIconByUrl } from './icons'
 import {
@@ -256,11 +257,15 @@ export function setupIPC(deps: { notifyStore: NotificationStore }): void {
     const validDy = sanitizeNumber(dy)
     if (validDx === null || validDy === null) return
     const win = getActiveWin()
-    if (!win) return
-    const [x, y] = win.getPosition()
-    win.setPosition(x + validDx, y + validDy)
-    // 边缘条与主窗口同帧跟随，避免拖拽时小竖条滞后导致指针滑出窗口而"断开"
-    updateEdgeWindowPosition()
+    if (!win || win.isDestroyed()) return
+    try {
+      const [x, y] = win.getPosition()
+      win.setPosition(x + validDx, y + validDy)
+      // 边缘条与主窗口同帧跟随，避免拖拽时小竖条滞后导致指针滑出窗口而"断开"
+      updateEdgeWindowPosition()
+    } catch (e) {
+      log.error('move-window failed:', e, { dx: validDx, dy: validDy })
+    }
   })
 
   ipcMain.on('theme-changed', (_event, theme: string) => {

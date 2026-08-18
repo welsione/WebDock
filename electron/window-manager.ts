@@ -2,10 +2,10 @@
 // 负责主窗口、边缘条窗口的创建、销毁和位置管理
 // （MENUBAR 弹窗模式已下线：popupWindow 从不显示且无 UI 承载，相关代码已删除）
 
-import { BrowserWindow, screen, app } from 'electron'
+import { BrowserWindow, screen } from 'electron'
 import path from 'path'
 import log from 'electron-log'
-import { EDGE_PILL_WIDTH, EDGE_PILL_HEIGHT, RESIZE_UPDATE_DELAY_MS, BOUNDS_SAVE_DELAY_MS } from './config'
+import { EDGE_PILL_WIDTH, EDGE_PILL_HEIGHT, EDGE_FADE_MS, RESIZE_UPDATE_DELAY_MS, BOUNDS_SAVE_DELAY_MS } from './config'
 
 // ===== 状态 =====
 let mainWindow: BrowserWindow | null = null
@@ -14,6 +14,9 @@ let savedBounds: { x: number; y: number; width: number; height: number } | null 
 let currentTheme = 'dark'
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let boundsSaveTimer: ReturnType<typeof setTimeout> | null = null
+/** 边缘条淡出中（防止重复销毁把动画掐断 / 淡出期间重复调用直接跳过） */
+let edgeFading = false
+let edgeFadeTimer: ReturnType<typeof setTimeout> | null = null
 /** 应用是否正在退出（before-quit 置位；为 true 时窗口 close 放行，否则隐藏） */
 let isQuitting = false
 
@@ -188,7 +191,21 @@ export function toggleWindowVisibility(): void {
 
 // ===== 创建边缘条窗口 =====
 export function createEdgeWindow(parentWin: BrowserWindow): void {
-  if (edgeWindow) return
+  // 淡出进行中重新进入沉浸模式：取消淡出，复用现有窗口并恢复显示
+  if (edgeWindow) {
+    if (edgeFading) {
+      if (edgeFadeTimer) {
+        clearTimeout(edgeFadeTimer)
+        edgeFadeTimer = null
+      }
+      edgeFading = false
+      try {
+        edgeWindow.webContents.send('edge-show')
+      } catch { /* 页面可能未加载完成 */ }
+      updateEdgeWindowPosition()
+    }
+    return
+  }
 
   const contentBounds = parentWin.getContentBounds()
   const pillY = contentBounds.y + Math.round((contentBounds.height - EDGE_PILL_HEIGHT) / 2)
@@ -241,19 +258,32 @@ export function createEdgeWindow(parentWin: BrowserWindow): void {
 
 // ===== 更新边缘条位置 =====
 export function updateEdgeWindowPosition(): void {
-  if (!edgeWindow) return
-
+  const win = edgeWindow
   const parentWin = mainWindow
-  if (!parentWin) return
+  if (!win || win.isDestroyed() || !parentWin || parentWin.isDestroyed()) return
 
-  const contentBounds = parentWin.getContentBounds()
-  const pillY = contentBounds.y + Math.round((contentBounds.height - EDGE_PILL_HEIGHT) / 2)
-
-  edgeWindow.setPosition(contentBounds.x, pillY)
+  const bounds = parentWin.getContentBounds()
+  // 防止瞬时状态（拖动中窗口重排/重建）返回非法值：NaN 传入 setPosition 会抛
+  // "Error processing argument at index 0, conversion failure from NaN" 崩溃
+  if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)) {
+    log.warn('updateEdgeWindowPosition: 无效 contentBounds, 跳过本次跟随', bounds)
+    return
+  }
+  const pillY = bounds.y + Math.round((bounds.height - EDGE_PILL_HEIGHT) / 2)
+  if (!Number.isFinite(pillY)) return
+  try {
+    win.setPosition(bounds.x, pillY)
+  } catch (e) {
+    log.error('updateEdgeWindowPosition failed:', e, { bounds, pillY })
+  }
 }
 
 // ===== 销毁边缘条窗口 =====
-export function destroyEdgeWindow(): void {
+function destroyEdgeWindowNow(): void {
+  if (edgeFadeTimer) {
+    clearTimeout(edgeFadeTimer)
+    edgeFadeTimer = null
+  }
   if (edgeWindow) {
     const win = edgeWindow as unknown as Record<string, unknown>
     if (typeof (win._cleanup) === 'function') {
@@ -270,6 +300,27 @@ export function destroyEdgeWindow(): void {
     }
     edgeWindow = null
   }
+  edgeFading = false
+}
+
+/** 销毁边缘条：正常运行时先让渲染进程淡出（CSS 过渡 150ms）再销毁；退出时直接销毁 */
+export function destroyEdgeWindow(): void {
+  if (!edgeWindow) return
+  if (!isQuitting && !edgeFading) {
+    edgeFading = true
+    try {
+      edgeWindow.webContents.send('edge-fade-out')
+    } catch { /* 页面可能未加载完成 */ }
+    edgeFadeTimer = setTimeout(() => {
+      edgeFadeTimer = null
+      edgeFading = false
+      destroyEdgeWindowNow()
+    }, EDGE_FADE_MS)
+    return
+  }
+  // 淡出进行中：忽略重复调用，等淡出结束统一销毁（避免把动画掐断）
+  if (edgeFading) return
+  destroyEdgeWindowNow()
 }
 
 // ===== 发送主题变更到边缘条 =====
