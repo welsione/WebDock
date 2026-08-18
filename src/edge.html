@@ -29,28 +29,23 @@
 
     /* 悬浮腰圆条 */
     .pill {
-      width: 5px;
-      height: 56px;
-      border-radius: 2.5px;
+      width: 6px;
+      height: 88px;
+      border-radius: 3px;
       background: var(--edge-pill);
       /* 向下柔和阴影：浅色/深色背景下都与桌面分离，避免"隐形" */
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
       transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       cursor: grab;
+      will-change: transform;
     }
 
-    body.dragging .pill {
-      width: 6px;
-      height: 64px;
-      border-radius: 3px;
-      background: var(--edge-pill-hover);
-    }
-
+    body.dragging .pill,
     body:hover .pill {
-      width: 6px;
-      height: 64px;
-      border-radius: 3px;
+      width: 7px;
+      height: 98px;
+      border-radius: 3.5px;
       background: var(--edge-pill-hover);
     }
   </style>

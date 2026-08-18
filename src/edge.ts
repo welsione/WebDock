@@ -23,17 +23,23 @@ function endDrag(): void {
   }
 }
 
-document.body.addEventListener('mousedown', (e) => {
+// 用 Pointer Events + 指针捕获：拖拽时即使指针短暂滑出仅 20px 宽的边缘窗，
+// move 事件仍持续送达，避免快速拖动时 mouseleave 过早结束拖拽导致"断开"。
+document.body.addEventListener('pointerdown', e => {
   dragging = true
   startX = e.screenX
   startY = e.screenY
   totalDX = 0
   totalDY = 0
   document.body.classList.add('dragging')
-  e.preventDefault()
+  try {
+    document.body.setPointerCapture(e.pointerId)
+  } catch {
+    // 个别平台不支持捕获时退化为普通拖拽
+  }
 })
 
-window.addEventListener('mousemove', (e) => {
+document.body.addEventListener('pointermove', e => {
   if (!dragging) return
   const dx = e.screenX - startX
   const dy = e.screenY - startY
@@ -44,6 +50,5 @@ window.addEventListener('mousemove', (e) => {
   window.edgeAPI.moveWindow(dx, dy)
 })
 
-window.addEventListener('mouseup', endDrag)
-// 鼠标移出窗口时也结束拖拽，防止 mouseup 丢失导致拖拽卡住
-document.body.addEventListener('mouseleave', endDrag)
+document.body.addEventListener('pointerup', endDrag)
+document.body.addEventListener('pointercancel', endDrag)

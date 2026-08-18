@@ -29,7 +29,8 @@ import {
   getActiveWin as getActiveWinFromMgr,
   getMainWindowRef,
   setWindowButtonVisibility,
-  sendEdgeThemeChange
+  sendEdgeThemeChange,
+  updateEdgeWindowPosition
 } from './window-manager'
 import { saveSettings, DEFAULT_APP_SETTINGS, type StoredWebApp } from './settings-store'
 import {
@@ -258,6 +259,8 @@ export function setupIPC(deps: { notifyStore: NotificationStore }): void {
     if (!win) return
     const [x, y] = win.getPosition()
     win.setPosition(x + validDx, y + validDy)
+    // 边缘条与主窗口同帧跟随，避免拖拽时小竖条滞后导致指针滑出窗口而"断开"
+    updateEdgeWindowPosition()
   })
 
   ipcMain.on('theme-changed', (_event, theme: string) => {
