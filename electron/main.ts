@@ -24,6 +24,7 @@ import {
 } from './window-manager'
 import { getCurrentShortcut, setCurrentShortcut, registerGlobalShortcut, setToggleHandler, unregisterAllShortcuts } from './shortcut-manager'
 import { setupIPC } from './ipc-handlers'
+import { decidePermissionRequest } from './session-policies'
 import { setupAutoUpdater, setUpdateWindows } from './auto-updater'
 import { buildMenu } from './app-menu'
 import { shutdownManagedServices } from './service-launcher'
@@ -49,22 +50,11 @@ function handlePageTitle(key: string, title: string): void {
 
 // ===== 会话安全：权限与证书 =====
 function setupSessionPolicies(): void {
-  // 每应用权限：摄像头/麦克风/定位按配置，其余拒绝；通知由桥接管放行
+  // 每应用权限：摄像头/麦克风/定位按配置，其余按统一决策（通知与剪贴板写入放行）
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
-    if (permission === 'notifications') {
-      callback(true)
-      return
-    }
     const key = getWebAppKeyByWebContents(wc)
     const webApp = key ? getMergedWebApps().find(a => a.key === key) : undefined
-    const perms = webApp?.permissions
-    let allow = false
-    if (permission === 'media') {
-      allow = perms?.camera === 'allow' || perms?.microphone === 'allow'
-    } else if (permission === 'geolocation') {
-      allow = perms?.geolocation === 'allow'
-    }
-    callback(allow)
+    callback(decidePermissionRequest(permission, webApp?.permissions))
   })
 
   // 自签名证书：仅信任用户显式配置的应用（本地 https 服务场景）

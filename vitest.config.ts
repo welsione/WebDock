@@ -18,6 +18,7 @@ export default defineConfig({
         'electron/navigation.ts',
         'electron/service-launcher.ts',
         'electron/notification-store.ts',
+        'electron/session-policies.ts',
         'electron/browser-view-manager.ts',
         'electron/window-manager.ts',
         'electron/icons.ts',
@@ -38,6 +39,7 @@ export default defineConfig({
           'electron/navigation.ts': 90,
           'electron/service-launcher.ts': 75,
           'electron/notification-store.ts': 85,
+          'electron/session-policies.ts': 90,
           'src/state.ts': 85,
           'src/ui/loading.ts': 80,
           'src/utils/escape-html.ts': 90
@@ -51,6 +53,7 @@ export default defineConfig({
           'electron/navigation.ts': 90,
           'electron/service-launcher.ts': 70,
           'electron/notification-store.ts': 85,
+          'electron/session-policies.ts': 90,
           'src/state.ts': 85,
           'src/ui/loading.ts': 80,
           'src/utils/escape-html.ts': 90
